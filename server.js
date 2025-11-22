@@ -24,7 +24,7 @@ app.use(express.json({ limit: "5mb" }));
 
 app.use(
   cors({
-    origin: CORS_ORIGIN || DEPLOYED_CORS_ORIGIN,
+    origin: DEPLOYED_CORS_ORIGIN,
     credentials: true,
   })
 );
@@ -46,6 +46,9 @@ app.use("/api/syllabus", syllabusRoutes);
 
 // ERROR HANDLER
 app.use(errorHandler);
+
+const SERVER_PORT = process.env.PORT;
+console.log(SERVER_PORT);
 
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
