@@ -6,8 +6,12 @@ const teacherSchema = new mongoose.Schema(
     email: { type: String, required: true, unique: true },
     password: { type: String, required: true },
 
-    // Optional: subjects they handle
     subjects: [{ type: String }],
+
+    role: { type: String, default: "teacher" },
+
+    // NEW — approval required
+    isActive: { type: Boolean, default: false },
   },
   { timestamps: true }
 );

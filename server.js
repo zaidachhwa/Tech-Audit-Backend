@@ -24,7 +24,7 @@ app.use(express.json({ limit: "5mb" }));
 
 app.use(
   cors({
-    origin: DEPLOYED_CORS_ORIGIN,
+    origin: [DEPLOYED_CORS_ORIGIN, CORS_ORIGIN],
     credentials: true,
   })
 );
