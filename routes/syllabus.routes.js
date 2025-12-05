@@ -1,26 +1,55 @@
 import express from "express";
 import {
+  createSyllabus,
+  addTopic,
+  getAllSyllabi,
+  getSyllabusById,
+  assignSyllabusToBatch,
+  assignTeacherToBatchTopic,
+  getBatchSyllabi,
+  getBatchTopics,
+  getSyllabusWithProgress,
+  getTeacherTopics,
+  markTopicCompleted,
+  updateTopicStatus,
+  addTopicRemark,
+  deleteBatchSyllabus,
+  getBatchesWithSyllabi,
+  getAssignedSyllabiForTeacher,
+} from "../controllers/syllabus.controller.js";
+import {
   verifyToken,
   isAdmin,
   isTeacher,
 } from "../middleware/auth.middleware.js";
-import {
-  createSyllabus,
-  addTopic,
-  assignTopicToTeacher,
-  getTeacherTopics,
-  markTopicCompleted,
-  addTopicRemark,
-  getSyllabusWithProgress,
-  getAllSyllabi,
-} from "../controllers/syllabus.controller.js";
 
 const router = express.Router();
 
-// ADMIN
+// ===== ADMIN - TEMPLATE MANAGEMENT =====
 router.post("/create", verifyToken, isAdmin, createSyllabus);
 router.post("/topic", verifyToken, isAdmin, addTopic);
-router.patch("/assign-topic", verifyToken, isAdmin, assignTopicToTeacher);
+router.get("/all", verifyToken, isAdmin, getAllSyllabi);
+router.get("/template/:syllabusId", verifyToken, isAdmin, getSyllabusById);
+
+// ===== ADMIN - BATCH ASSIGNMENT =====
+router.post("/assign-to-batch", verifyToken, isAdmin, assignSyllabusToBatch);
+router.post("/assign-teacher", verifyToken, isAdmin, assignTeacherToBatchTopic);
+router.get("/batch-instances", verifyToken, isAdmin, getBatchSyllabi);
+router.get("/batch-topics", verifyToken, isAdmin, getBatchTopics);
+router.delete(
+  "/batch-syllabus/:batchSyllabusId",
+  verifyToken,
+  isAdmin,
+  deleteBatchSyllabus
+);
+router.get(
+  "/batches-with-syllabi",
+  verifyToken,
+  isAdmin,
+  getBatchesWithSyllabi
+);
+
+// ===== ADMIN - PROGRESS TRACKING =====
 router.get(
   "/progress/:syllabusId",
   verifyToken,
@@ -28,7 +57,7 @@ router.get(
   getSyllabusWithProgress
 );
 
-// TEACHER
+// ===== TEACHER - TOPIC MANAGEMENT =====
 router.get("/my-topics", verifyToken, isTeacher, getTeacherTopics);
 router.patch(
   "/topic/:topicId/complete",
@@ -36,7 +65,22 @@ router.patch(
   isTeacher,
   markTopicCompleted
 );
+router.patch(
+  "/topic/:topicId/status",
+  verifyToken,
+  isTeacher,
+  updateTopicStatus
+);
 router.patch("/topic/:topicId/remark", verifyToken, isTeacher, addTopicRemark);
-router.get("/all", verifyToken, isAdmin, getAllSyllabi);
+
+// Teacher-friendly: get batches with assigned syllabi (or single batch)
+router.get(
+  "/assigned-syllabi",
+  verifyToken, // allow any authenticated user (teachers & admins)
+  isTeacher,
+  getAssignedSyllabiForTeacher
+);
+
+router.get("/batch-topics-teacher", verifyToken, isTeacher, getBatchTopics);
 
 export default router;

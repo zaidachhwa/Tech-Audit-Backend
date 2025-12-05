@@ -109,18 +109,35 @@ export const getAllStudents = async (req, res) => {
   try {
     const { page = 1, limit = 50, search } = req.query;
     const skip = (Number(page) - 1) * Number(limit);
+
+    // search query
     const q = search ? { name: { $regex: search, $options: "i" } } : {};
 
+    // total count for pagination
     const total = await Student.countDocuments(q);
+
+    // NEW: Count active & pending
+    const totalActive = await Student.countDocuments({ ...q, isActive: true });
+    const totalPending = await Student.countDocuments({
+      ...q,
+      isActive: false,
+    });
+
     const students = await Student.find(q)
       .select("-password")
+      .sort({ isActive: 1, createdAt: -1 })
       .skip(skip)
       .limit(Number(limit))
       .lean();
 
-    return res
-      .status(200)
-      .json({ total, page: Number(page), limit: Number(limit), students });
+    return res.status(200).json({
+      total,
+      totalActive,
+      totalPending,
+      page: Number(page),
+      limit: Number(limit),
+      students,
+    });
   } catch (err) {
     return res.status(500).json({ message: err.message });
   }
