@@ -7,6 +7,7 @@ import { BatchSyllabus } from "../models/batchSyllabus.model.js";
 import { BatchTopic } from "../models/batchTopic.model.js";
 import Batch from "../models/batch.model.js";
 import { Teacher } from "../models/teacher.model.js";
+import { sendWhatsAppMessage } from "../utils/whatsapp.js";
 
 /**
  * ============================================
@@ -202,10 +203,28 @@ export const assignTeacherToBatchTopic = async (req, res) => {
       batchTopicId,
       { assignedTo: teacherId },
       { new: true }
-    ).populate("assignedTo", "name email");
+    )
+      .populate("assignedTo", "name email phone")
+      .populate("templateTopic", "title")
+      .populate("batch", "batch_name batch_no");
 
     if (!batchTopic) {
       return res.status(404).json({ message: "Batch topic not found" });
+    }
+
+    // ⭐⭐⭐ SEND WHATSAPP MESSAGE ⭐⭐⭐
+    if (teacher.phone) {
+      const msg = `📘 *New Topic Assigned*\n\nHello *${
+        teacher.name
+      }*,\nYou have been assigned a new topic:\n\n*${
+        batchTopic.title || batchTopic.templateTopic?.title
+      }*\nBatch: ${
+        batchTopic.batch?.batch_name || ""
+      }\n\nPlease check your portal for details.`;
+
+      await sendWhatsAppMessage(teacher.phone, msg);
+    } else {
+      console.log("⚠ Teacher has no phone number, WhatsApp not sent.");
     }
 
     res.json({
