@@ -8,6 +8,7 @@ import { BatchTopic } from "../models/batchTopic.model.js";
 import Batch from "../models/batch.model.js";
 import { Teacher } from "../models/teacher.model.js";
 import { sendWhatsAppMessage } from "../utils/whatsapp.js";
+import * as syllabusService from "../services/syllabus.service.js";
 
 /**
  * ============================================
@@ -596,5 +597,80 @@ export const getAssignedSyllabiForTeacher = async (req, res) => {
   } catch (err) {
     console.error("getAssignedSyllabiForTeacher error:", err);
     res.status(500).json({ message: err.message });
+  }
+};
+// ✅ UPDATE SYLLABUS
+export const updateSyllabus = async (req, res) => {
+  try {
+    const updated = await syllabusService.updateSyllabusService(
+      req.params.syllabusId,
+      req.body
+    );
+
+    if (!updated)
+      return res.status(404).json({ message: "Syllabus not found" });
+
+    return res.status(200).json({
+      message: "Syllabus updated successfully",
+      updated,
+    });
+  } catch (err) {
+    return res.status(500).json({ message: err.message });
+  }
+};
+
+// ✅ DELETE SYLLABUS
+export const deleteSyllabus = async (req, res) => {
+  try {
+    const deleted = await syllabusService.deleteSyllabusService(
+      req.params.syllabusId
+    );
+
+    if (!deleted)
+      return res.status(404).json({ message: "Syllabus not found" });
+
+    return res.status(200).json({
+      message: "Syllabus deleted successfully",
+    });
+  } catch (err) {
+    return res.status(500).json({ message: err.message });
+  }
+};
+
+// ✅ UPDATE TOPIC
+export const updateTopic = async (req, res) => {
+  try {
+    const updated = await syllabusService.updateTopicService(
+      req.params.topicId,
+      req.body
+    );
+
+    if (!updated)
+      return res.status(404).json({ message: "Topic not found" });
+
+    return res.status(200).json({
+      message: "Topic updated successfully",
+      updated,
+    });
+  } catch (err) {
+    return res.status(500).json({ message: err.message });
+  }
+};
+
+// ✅ DELETE TOPIC
+export const deleteTopic = async (req, res) => {
+  try {
+    const deleted = await syllabusService.deleteTopicService(
+      req.params.topicId
+    );
+
+    if (!deleted)
+      return res.status(404).json({ message: "Topic not found" });
+
+    return res.status(200).json({
+      message: "Topic deleted successfully",
+    });
+  } catch (err) {
+    return res.status(500).json({ message: err.message });
   }
 };

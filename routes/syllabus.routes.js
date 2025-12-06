@@ -16,6 +16,10 @@ import {
   deleteBatchSyllabus,
   getBatchesWithSyllabi,
   getAssignedSyllabiForTeacher,
+  updateSyllabus,
+  deleteSyllabus,
+  updateTopic,
+  deleteTopic,
 } from "../controllers/syllabus.controller.js";
 import {
   verifyToken,
@@ -47,6 +51,39 @@ router.get(
   verifyToken,
   isAdmin,
   getBatchesWithSyllabi
+);
+// ===== ADMIN - UPDATE & DELETE =====
+
+// ✅ Update syllabus template
+router.put(
+  "/template/:syllabusId",
+  verifyToken,
+  isAdmin,
+  updateSyllabus
+);
+
+// ✅ Delete syllabus template
+router.delete(
+  "/template/:syllabusId",
+  verifyToken,
+  isAdmin,
+  deleteSyllabus
+);
+
+// ✅ Update topic
+router.put(
+  "/topic/:topicId",
+  verifyToken,
+  isAdmin,
+  updateTopic
+);
+
+// ✅ Delete topic
+router.delete(
+  "/topic/:topicId",
+  verifyToken,
+  isAdmin,
+  deleteTopic
 );
 
 // ===== ADMIN - PROGRESS TRACKING =====

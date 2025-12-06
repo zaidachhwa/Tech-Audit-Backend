@@ -67,3 +67,35 @@ export const addStudentToBatch = async (req, res) => {
     return res.status(500).json({ message: err.message });
   }
 };
+export const updateBatch = async (req, res) => {
+  try {
+    const updatedBatch = await batchService.updateBatchService(
+      req.params.id,
+      req.body
+    );
+
+    if (!updatedBatch)
+      return res.status(404).json({ message: "Batch not found" });
+
+    return res
+      .status(200)
+      .json({ message: "Batch updated successfully", updatedBatch });
+  } catch (err) {
+    return res.status(500).json({ message: err.message });
+  }
+};
+
+export const deleteBatch = async (req, res) => {
+  try {
+    const deletedBatch = await batchService.deleteBatchService(req.params.id);
+
+    if (!deletedBatch)
+      return res.status(404).json({ message: "Batch not found" });
+
+    return res
+      .status(200)
+      .json({ message: "Batch deleted successfully" });
+  } catch (err) {
+    return res.status(500).json({ message: err.message });
+  }
+};
