@@ -183,3 +183,126 @@ export const deleteTeacher = async (req, res) => {
     return res.status(500).json({ message: err.message });
   }
 };
+
+/* ============================================================
+   GET TEACHER PROFILE  (GET /teachers/profile)
+============================================================ */
+export const getTeacherProfile = async (req, res) => {
+  try {
+    const teacherId = req.user.id;
+
+    const teacher = await Teacher.findById(teacherId).select("-password");
+    if (!teacher) {
+      return res.status(404).json({ message: "Teacher not found" });
+    }
+
+    res.json({ user: teacher });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+};
+
+/* ============================================================
+   UPDATE TEACHER PROFILE  (PATCH /teachers/profile)
+   Editable fields: name, phone, location, bio
+============================================================ */
+export const updateTeacherProfile = async (req, res) => {
+  try {
+    const teacherId = req.user.id;
+
+    const allowedFields = ["name", "phone", "location", "bio"];
+    const updates = {};
+
+    allowedFields.forEach((field) => {
+      if (req.body[field] !== undefined) updates[field] = req.body[field];
+    });
+
+    const updated = await Teacher.findByIdAndUpdate(teacherId, updates, {
+      new: true,
+    }).select("-password");
+
+    res.json({ message: "Profile updated", user: updated });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+};
+
+/* ============================================================
+   CHANGE PASSWORD  (PATCH /teachers/change-password)
+============================================================ */
+export const changeTeacherPassword = async (req, res) => {
+  try {
+    const teacherId = req.user.id;
+    const { currentPassword, newPassword } = req.body;
+
+    const teacher = await Teacher.findById(teacherId);
+    if (!teacher) {
+      return res.status(404).json({ message: "Teacher not found" });
+    }
+
+    const isMatch = await bcrypt.compare(currentPassword, teacher.password);
+    if (!isMatch) {
+      return res.status(400).json({ message: "Current password is incorrect" });
+    }
+
+    const hashed = await bcrypt.hash(newPassword, 10);
+    teacher.password = hashed;
+
+    await teacher.save();
+
+    res.json({ message: "Password changed successfully" });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+};
+
+/* ============================================================
+   TEACHER STATS (GET /teachers/stats)
+============================================================ */
+export const getTeacherStats = async (req, res) => {
+  try {
+    const teacherId = req.user.id;
+
+    /**
+     * IMPORTANT:
+     * You must replace these models WITH your actual DB models.
+     * I'm creating placeholders so your controller logic stays same.
+     */
+
+    const Topic = mongoose.model("Topic");
+    const Batch = mongoose.model("Batch");
+    const Student = mongoose.model("Student");
+
+    const totalTopics = await Topic.countDocuments({ teacher: teacherId });
+    const completedTopics = await Topic.countDocuments({
+      teacher: teacherId,
+      status: "completed",
+    });
+    const inProgressTopics = await Topic.countDocuments({
+      teacher: teacherId,
+      status: "in-progress",
+    });
+
+    const assignedBatches = await Batch.find({ teacher: teacherId }).select(
+      "_id"
+    );
+
+    const totalStudents = await Student.countDocuments({
+      batchId: { $in: assignedBatches.map((b) => b._id) },
+    });
+
+    const completionRate =
+      totalTopics > 0 ? Math.round((completedTopics / totalTopics) * 100) : 0;
+
+    res.json({
+      totalTopics,
+      completedTopics,
+      inProgressTopics,
+      totalBatches: assignedBatches.length,
+      totalStudents,
+      completionRate,
+    });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+};
