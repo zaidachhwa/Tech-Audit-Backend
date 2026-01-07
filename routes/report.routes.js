@@ -4,6 +4,8 @@ import {
   getAllReports,
   getReportsByStudent,
   getBatchAverages,
+  generateReportPdf,
+  generateReportPreviewPdf,
 } from "../controllers/report.controller.js";
 import {
   verifyToken,
@@ -29,5 +31,8 @@ router.get(
   },
   getReportsByStudent
 );
+
+router.get("/:id/pdf", generateReportPdf);
+router.post("/preview", generateReportPreviewPdf);
 
 export default router;
