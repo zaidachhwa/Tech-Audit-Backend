@@ -105,7 +105,7 @@ export const getSyllabusById = async (req, res) => {
  */
 export const assignSyllabusToBatch = async (req, res) => {
   try {
-    const { syllabusId, batchId, notes } = req.body;
+    const { syllabusId, batchId, notes, dueDate } = req.body;
 
     if (!syllabusId || !batchId) {
       return res.status(400).json({
@@ -143,6 +143,7 @@ export const assignSyllabusToBatch = async (req, res) => {
       syllabus: syllabusId,
       assignedBy: req.user.id,
       notes: notes || "",
+      dueDate: dueDate,
     });
 
     // Get template topics
@@ -645,8 +646,7 @@ export const updateTopic = async (req, res) => {
       req.body
     );
 
-    if (!updated)
-      return res.status(404).json({ message: "Topic not found" });
+    if (!updated) return res.status(404).json({ message: "Topic not found" });
 
     return res.status(200).json({
       message: "Topic updated successfully",
@@ -664,8 +664,7 @@ export const deleteTopic = async (req, res) => {
       req.params.topicId
     );
 
-    if (!deleted)
-      return res.status(404).json({ message: "Topic not found" });
+    if (!deleted) return res.status(404).json({ message: "Topic not found" });
 
     return res.status(200).json({
       message: "Topic deleted successfully",

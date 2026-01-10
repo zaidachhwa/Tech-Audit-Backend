@@ -7,6 +7,7 @@ const batchSyllabusSchema = new mongoose.Schema(
       ref: "Batch",
       required: true,
     },
+
     syllabus: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Syllabus",
@@ -14,15 +15,28 @@ const batchSyllabusSchema = new mongoose.Schema(
     },
 
     // who assigned this (admin)
-    assignedBy: { type: mongoose.Schema.Types.ObjectId, ref: "Admin" },
+    assignedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Admin",
+      required: true,
+    },
 
     // optional friendly name / notes
-    notes: { type: String, default: "" },
+    notes: {
+      type: String,
+      default: "",
+    },
+
+    // ✅ REQUIRED: syllabus-level due date
+    dueDate: {
+      type: Date,
+      required: true,
+    },
   },
   { timestamps: true }
 );
 
-// ensure a batch has at most one instance per syllabus (prevent duplicates)
+// prevent duplicate assignment
 batchSyllabusSchema.index({ batch: 1, syllabus: 1 }, { unique: true });
 
 export const BatchSyllabus = mongoose.model(
