@@ -231,7 +231,17 @@ export const generateReportPdf = async (req, res) => {
           width: cardWidth - 120,
           align: "left",
         });
+      // ---- Score-based colors ----
+      let badgeStrokeColor = "#10B981"; // green
+      let badgeTextColor = "#059669";
 
+      if (p.score <= 4) {
+        badgeStrokeColor = "#EF4444"; // red
+        badgeTextColor = "#DC2626";
+      } else if (p.score <= 7) {
+        badgeStrokeColor = "#F59E0B"; // yellow
+        badgeTextColor = "#D97706";
+      }
       /* ---- Score badge (right) ---- */
       const badgeWidth = 60;
       const badgeHeight = 20;
@@ -241,12 +251,12 @@ export const generateReportPdf = async (req, res) => {
       doc
         .roundedRect(badgeX, badgeY, badgeWidth, badgeHeight, 5)
         .lineWidth(1)
-        .strokeColor("#10B981")
+        .strokeColor(badgeStrokeColor)
         .stroke();
 
       doc
         .fontSize(10)
-        .fillColor("#059669")
+        .fillColor(badgeTextColor)
         .font("Helvetica-Bold")
         .text(`${p.score} / 10`, badgeX, badgeY + 5, {
           width: badgeWidth,
@@ -525,6 +535,18 @@ export const generateReportPreviewPdf = async (req, res) => {
           align: "left",
         });
 
+      // ---- Score-based colors ----
+      let badgeStrokeColor = "#10B981"; // default green
+      let badgeTextColor = "#059669";
+
+      if (p.score <= 4) {
+        badgeStrokeColor = "#EF4444"; // red
+        badgeTextColor = "#DC2626";
+      } else if (p.score <= 7) {
+        badgeStrokeColor = "#F59E0B"; // yellow
+        badgeTextColor = "#D97706";
+      }
+
       /* ---- Score badge (right) ---- */
       const badgeWidth = 60;
       const badgeHeight = 20;
@@ -534,12 +556,12 @@ export const generateReportPreviewPdf = async (req, res) => {
       doc
         .roundedRect(badgeX, badgeY, badgeWidth, badgeHeight, 5)
         .lineWidth(1)
-        .strokeColor("#10B981")
+        .strokeColor(badgeStrokeColor)
         .stroke();
 
       doc
         .fontSize(10)
-        .fillColor("#059669")
+        .fillColor(badgeTextColor)
         .font("Helvetica-Bold")
         .text(`${p.score} / 10`, badgeX, badgeY + 5, {
           width: badgeWidth,

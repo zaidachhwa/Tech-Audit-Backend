@@ -127,9 +127,9 @@ export const getAllStudents = async (req, res) => {
       .select("-password")
       .sort({ isActive: 1, createdAt: -1 })
       .skip(skip)
-      .limit(Number(limit))
+      // .limit(Number(limit))
       .lean();
-
+    // console.log(students)
     return res.status(200).json({
       total,
       totalActive,
