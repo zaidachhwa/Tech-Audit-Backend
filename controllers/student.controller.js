@@ -107,7 +107,7 @@ export const getStudentById = async (req, res) => {
 /* Get all students (admin) */
 export const getAllStudents = async (req, res) => {
   try {
-    const { page = 1, limit = 50, search } = req.query;
+    const { page = 1, limit = 150, search } = req.query;
     const skip = (Number(page) - 1) * Number(limit);
 
     // search query
@@ -127,7 +127,7 @@ export const getAllStudents = async (req, res) => {
       .select("-password")
       .sort({ isActive: 1, createdAt: -1 })
       .skip(skip)
-      // .limit(Number(limit))
+      .limit(Number(limit))
       .lean();
     // console.log(students)
     return res.status(200).json({
