@@ -23,6 +23,8 @@ const reportSchema = new mongoose.Schema(
     overallRemarks: { type: String, default: "" },
     auditDate: { type: Date, default: Date.now },
     pdfUrl: { type: String, default: "" },
+
+    status:{type: String, enum:["draft","final"],default:"final"}
   },
   { timestamps: true }
 );

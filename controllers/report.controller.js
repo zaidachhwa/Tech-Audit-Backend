@@ -24,6 +24,73 @@ export const createReport = async (req, res) => {
   }
 };
 
+
+export const saveDraftReport = async (req,res) => {
+  try{
+    //fields coming from the frontend
+    const{ studentId, parameters, feedbackSchema, overallRemarks, auditDate} =
+    req.body;
+
+    //studentId is mandatory else draft is not identify
+    if(!studentId){
+      return res.status(400).json({message: "studentId required"});
+    }
+
+    //same student + same audit date backend search the same existing draft (no multiple drafts craeated)
+    let draft = await Report.findOne({
+      student: studentId,
+      auditDate: auditDate,
+      status: "draft",
+    });
+
+    if(draft){
+      //if draft already exist
+      draft.parameters = parameters;
+      draft.feedbackSchema = [feedbackSchema]  //wrap in array bcoz schema is in array
+      draft.overallRemarks = overallRemarks;
+
+      await draft.save();  
+
+      return res.json({message:"Draft updated", report:draft})
+    }
+
+    //if draft is not not exist
+    const newDraft = await Report.create({
+      student: studentId,
+      parameters,
+      feedbackSchema: [feedbackSchema],
+      overallRemarks,
+      auditDate,
+      status: "draft",
+    });
+
+    res.json({message: "Draft saved", report:newDraft});  //calling frontend successfully darft saved
+  } catch(err){
+    res.status(500).json({message: err.message});
+  }
+  };
+
+//purpose: existing form should be auto-load when draft opened  
+export const getDraftReport = async (req, res) => {
+  try{
+    //query params gives studentId and dates
+    const{ studentId, auditDate } = req.query;
+
+    //Draft search the same student and same date in DB
+    const draft = await Report.findOne({
+      student: studentId,
+      auditDate: auditDate,
+      status: "draft",
+    });
+
+    //if draft found return it or else new page is loaded by frontend
+    res.json(draft || null );
+  } catch (err){
+    res.status(500).json({message: err.message });
+  }
+};
+
+
 export const getAllReports = async (req, res) => {
   try {
     const { page = 1, limit = 50, batch_name, batch_no, from, to } = req.query;
@@ -55,6 +122,27 @@ export const getAllReports = async (req, res) => {
     });
   } catch (err) {
     return res.status(500).json({ message: err.message });
+  }
+};
+
+export const getAllDrafts = async (req,res) => {
+  try{
+    const draft = await Report.find({ status: "draft" }) //only drafts reports
+    .populate("student", "name email batch_name batch_no")  //student info join
+    .sort({ updatedAt: -1}); //latest updated draft on top
+
+    res.json(draft);  //send the list to the frontend table
+  } catch (err){
+    res.status(500).json({ message: err.message });
+  }
+};
+
+export const deleteDraft = async (req,res) => {
+  try{
+    await Report.findByIdAndDelete(req.params.id);
+    res.json({message: "Draft Deleted"});
+  } catch (err){
+    res.status(500).json({message: err.message});
   }
 };
 
