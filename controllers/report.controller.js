@@ -25,15 +25,15 @@ export const createReport = async (req, res) => {
 };
 
 
-export const saveDraftReport = async (req,res) => {
-  try{
+export const saveDraftReport = async (req, res) => {
+  try {
     //fields coming from the frontend
-    const{ studentId, parameters, feedbackSchema, overallRemarks, auditDate} =
-    req.body;
+    const { studentId, parameters, feedbackSchema, overallRemarks, auditDate } =
+      req.body;
 
     //studentId is mandatory else draft is not identify
-    if(!studentId){
-      return res.status(400).json({message: "studentId required"});
+    if (!studentId) {
+      return res.status(400).json({ message: "studentId required" });
     }
 
     //same student + same audit date backend search the same existing draft (no multiple drafts craeated)
@@ -43,15 +43,15 @@ export const saveDraftReport = async (req,res) => {
       status: "draft",
     });
 
-    if(draft){
+    if (draft) {
       //if draft already exist
       draft.parameters = parameters;
       draft.feedbackSchema = [feedbackSchema]  //wrap in array bcoz schema is in array
       draft.overallRemarks = overallRemarks;
 
-      await draft.save();  
+      await draft.save();
 
-      return res.json({message:"Draft updated", report:draft})
+      return res.json({ message: "Draft updated", report: draft })
     }
 
     //if draft is not not exist
@@ -64,17 +64,17 @@ export const saveDraftReport = async (req,res) => {
       status: "draft",
     });
 
-    res.json({message: "Draft saved", report:newDraft});  //calling frontend successfully darft saved
-  } catch(err){
-    res.status(500).json({message: err.message});
+    res.json({ message: "Draft saved", report: newDraft });  //calling frontend successfully darft saved
+  } catch (err) {
+    res.status(500).json({ message: err.message });
   }
-  };
+};
 
 //purpose: existing form should be auto-load when draft opened  
 export const getDraftReport = async (req, res) => {
-  try{
+  try {
     //query params gives studentId and dates
-    const{ studentId, auditDate } = req.query;
+    const { studentId, auditDate } = req.query;
 
     //Draft search the same student and same date in DB
     const draft = await Report.findOne({
@@ -84,9 +84,9 @@ export const getDraftReport = async (req, res) => {
     });
 
     //if draft found return it or else new page is loaded by frontend
-    res.json(draft || null );
-  } catch (err){
-    res.status(500).json({message: err.message });
+    res.json(draft || null);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
   }
 };
 
@@ -125,26 +125,37 @@ export const getAllReports = async (req, res) => {
   }
 };
 
-export const getAllDrafts = async (req,res) => {
-  try{
+export const getAllDrafts = async (req, res) => {
+  try {
     const draft = await Report.find({ status: "draft" }) //only drafts reports
-    .populate("student", "name email batch_name batch_no")  //student info join
-    .sort({ updatedAt: -1}); //latest updated draft on top
+      .populate("student", "name email batch_name batch_no")  //student info join
+      .sort({ updatedAt: -1 }); //latest updated draft on top
 
     res.json(draft);  //send the list to the frontend table
-  } catch (err){
+  } catch (err) {
     res.status(500).json({ message: err.message });
   }
 };
 
-export const deleteDraft = async (req,res) => {
-  try{
+export const deleteDraft = async (req, res) => {
+  try {
     await Report.findByIdAndDelete(req.params.id);
-    res.json({message: "Draft Deleted"});
-  } catch (err){
-    res.status(500).json({message: err.message});
+    res.json({ message: "Draft Deleted" });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
   }
 };
+
+export const deleteReport = async (req, res) => {
+  try {
+    await Report.findByIdAndDelete(req.params.id);
+    res.json({ message: "Report Deleted" });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+};
+
+
 
 export const getReportsByStudent = async (req, res) => {
   try {
@@ -201,7 +212,7 @@ export const generateReportPdf = async (req, res) => {
     const headerImg = path.join(process.cwd(), "public", "newHeader.jpeg");
     const footerImg = path.join(process.cwd(), "public", "newFooter.jpeg");
     const PAGE_BOTTOM = 670;
-    const FOOTER_HEIGHT = 200;
+    const FOOTER_HEIGHT = 100;
 
     // ---------- Helpers ----------
     const drawHeader = () => {
@@ -210,7 +221,7 @@ export const generateReportPdf = async (req, res) => {
     };
 
     const drawFooter = () => {
-      const footerWidth = 550; // choose actual width you want
+      const footerWidth = 600; // choose actual width you want
       const footerY = doc.page.height - FOOTER_HEIGHT;
       const footerX = doc.page.width - footerWidth;
 
@@ -225,7 +236,7 @@ export const generateReportPdf = async (req, res) => {
         drawFooter();
         doc.addPage();
         drawHeader();
-        doc.moveDown(13)
+        doc.moveDown(5)
       }
     };
 
@@ -239,7 +250,7 @@ export const generateReportPdf = async (req, res) => {
     drawHeader();
 
     // ---------- Student Info (Left) and Batch Info (Right) ----------
-    const startY = doc.y + 130;
+    const startY = doc.y + 70;
 
     doc
       .fontSize(14)
@@ -433,7 +444,7 @@ export const generateReportPdf = async (req, res) => {
     doc.moveDown(2);
 
     // ---------- Feedback Points ----------
-    ensureSpace(120);
+    ensureSpace(100);
 
     doc
       .fontSize(12)
@@ -471,44 +482,44 @@ export const generateReportPdf = async (req, res) => {
     });
 
     // ---------- Signatures ----------
-    
-// ---------- Signatures (FIXED POSITION) ----------
 
-// Position signatures safely above footer
-const sigY = doc.page.height - FOOTER_HEIGHT - 40;
+    // ---------- Signatures (FIXED POSITION) ----------
 
-// If current flowing content is already too low, move to new page
-if (doc.y > sigY - 20) {
-  doc.addPage();
-  drawHeader();
-}
+    // Position signatures safely above footer
+    const sigY = doc.page.height - FOOTER_HEIGHT - 40;
 
-// Left signature line
-doc.moveTo(50, sigY).lineTo(250, sigY).stroke();
+    // If current flowing content is already too low, move to new page
+    if (doc.y > sigY - 20) {
+      doc.addPage();
+      drawHeader();
+    }
 
-// Right signature line
-doc.moveTo(320, sigY).lineTo(520, sigY).stroke();
+    // Left signature line
+    doc.moveTo(50, sigY).lineTo(250, sigY).stroke();
 
-doc
-  .fontSize(9)
-  .fillColor("#666")
-  .font("Helvetica")
-  .text(
-    "Evaluator's Signature and Stamp",
-    50,
-    sigY + 8,
-    { width: 200, align: "center" }
-  )
-  .text(
-    "Student's Signature",
-    320,
-    sigY + 8,
-    { width: 200, align: "center" }
-  );
+    // Right signature line
+    doc.moveTo(320, sigY).lineTo(520, sigY).stroke();
 
-// ---------- Footer ----------
-drawFooter();
-doc.end();
+    doc
+      .fontSize(9)
+      .fillColor("#666")
+      .font("Helvetica")
+      .text(
+        "Evaluator's Signature and Stamp",
+        50,
+        sigY + 8,
+        { width: 200, align: "center" }
+      )
+      .text(
+        "Student's Signature",
+        320,
+        sigY + 8,
+        { width: 200, align: "center" }
+      );
+
+    // ---------- Footer ----------
+    drawFooter();
+    doc.end();
 
   } catch (err) {
     console.error("PDF ERROR:", err);
@@ -546,7 +557,7 @@ export const generateReportPreviewPdf = async (req, res) => {
     const footerImg = path.join(process.cwd(), "public", "newFooter.jpeg");
 
     const PAGE_BOTTOM = 670;
-    const FOOTER_HEIGHT = 200;
+    const FOOTER_HEIGHT = 100;
 
     // ---------- Helpers ----------
     const drawHeader = () => {
@@ -555,7 +566,7 @@ export const generateReportPreviewPdf = async (req, res) => {
     };
 
     const drawFooter = () => {
-      const footerWidth = 550;
+      const footerWidth = 600;
       const footerY = doc.page.height - FOOTER_HEIGHT;
       const footerX = doc.page.width - footerWidth;
 
@@ -570,7 +581,7 @@ export const generateReportPreviewPdf = async (req, res) => {
         drawFooter();
         doc.addPage();
         drawHeader();
-        doc.moveDown(13);
+        doc.moveDown(6);
       }
     };
 
@@ -578,7 +589,7 @@ export const generateReportPreviewPdf = async (req, res) => {
     drawHeader();
 
     // ---------- Student Info ----------
-    const startY = doc.y + 130;
+    const startY = doc.y + 70;
 
     doc
       .fontSize(14)
@@ -730,7 +741,7 @@ export const generateReportPreviewPdf = async (req, res) => {
       width: boxWidth - padding * 2,
     });
 
-    doc.y = y + boxHeight + 12;
+    doc.y = y + boxHeight + 20;
 
     // ---------- Feedback ----------
     ensureSpace(120);
@@ -756,7 +767,7 @@ export const generateReportPreviewPdf = async (req, res) => {
     });
 
     // ---------- Signatures ----------
-    ensureSpace(80);
+    ensureSpace(40);
 
     const sigY = doc.y + 40;
 

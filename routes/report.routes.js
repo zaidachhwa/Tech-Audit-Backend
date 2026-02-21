@@ -10,6 +10,7 @@ import {
   getDraftReport,
   getAllDrafts,
   deleteDraft,
+  deleteReport,
 } from "../controllers/report.controller.js";
 
 import { verifyToken, isAdmin } from "../middleware/auth.middleware.js";
@@ -56,5 +57,7 @@ router.get("/drafts", verifyToken, isAdmin, getAllDrafts);
 
 // ⭐ delete draft
 router.delete("/draft/:id", verifyToken, isAdmin, deleteDraft);
+
+router.delete("/:id", verifyToken, isAdmin, deleteReport);
 
 export default router;
