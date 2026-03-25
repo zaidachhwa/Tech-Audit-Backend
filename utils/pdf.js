@@ -11,7 +11,7 @@ export const generateStudentReportPDF = async (report, student) => {
     <head>
       <style>
         body { font-family: Arial, sans-serif; padding: 20px; color: #333; }
-        h2 { color: #16a34a; }
+        h2 { color: #00b7ff; }
         table { width: 100%; border-collapse: collapse; margin-top: 20px; }
         th, td { border: 1px solid #ddd; padding: 8px; font-size: 14px; }
         th { background: #f3f4f6; }
