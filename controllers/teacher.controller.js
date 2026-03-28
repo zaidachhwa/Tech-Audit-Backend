@@ -2,6 +2,8 @@
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import { Teacher } from "../models/teacher.model.js";
+import { BatchTopic } from "../models/batchTopic.model.js";
+
 
 /* =====================================
    REGISTER TEACHER (pending approval)
@@ -302,6 +304,170 @@ export const getTeacherStats = async (req, res) => {
       totalStudents,
       completionRate,
     });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+};
+
+/* ============================================================
+   ADMIN: GET SINGLE TEACHER BY ID
+   GET /teachers/:teacherId
+============================================================ */
+export const getTeacherById = async (req, res) => {
+  try {
+    const { teacherId } = req.params;
+
+    // Guard against non-ObjectId strings
+    if (!teacherId.match(/^[0-9a-fA-F]{24}$/)) {
+      return res.status(400).json({ message: "Invalid teacher ID" });
+    }
+
+    const teacher = await Teacher.findById(teacherId).select("-password");
+    if (!teacher) {
+      return res.status(404).json({ message: "Teacher not found" });
+    }
+
+    res.json({ teacher });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+};
+
+/* ============================================================
+   ADMIN: GET TEACHER PROGRESS (from BatchTopic assignments)
+   GET /teachers/:teacherId/progress
+   Returns per-syllabus breakdown + overall topic stats
+============================================================ */
+export const getTeacherProgressForAdmin = async (req, res) => {
+  try {
+    const { teacherId } = req.params;
+
+    // Guard against non-ObjectId strings
+    if (!teacherId.match(/^[0-9a-fA-F]{24}$/)) {
+      return res.status(400).json({ message: "Invalid teacher ID" });
+    }
+
+    const teacher = await Teacher.findById(teacherId).select("-password");
+    if (!teacher) {
+      return res.status(404).json({ message: "Teacher not found" });
+    }
+
+    // All BatchTopics assigned to this teacher
+    const assignedTopics = await BatchTopic.find({ assignedTo: teacherId })
+      .populate("syllabus", "subject")
+      .populate("batch", "batch_name batch_no")
+      .lean();
+
+    // --- Overall stats ---
+    const total = assignedTopics.length;
+    const completed = assignedTopics.filter(
+      (t) => t.completionStatus === "Completed"
+    ).length;
+    const inProgress = assignedTopics.filter(
+      (t) => t.completionStatus === "In Progress"
+    ).length;
+    const pending = assignedTopics.filter(
+      (t) => t.completionStatus === "Pending"
+    ).length;
+    const completionRate = total > 0 ? Math.round((completed / total) * 100) : 0;
+
+    // --- Per-syllabus breakdown ---
+    const syllabusMap = {};
+
+    assignedTopics.forEach((topic) => {
+      const syllabusId = topic.syllabus?._id?.toString() ?? "unknown";
+      const syllabusName = topic.syllabus?.subject ?? "Unknown Syllabus";
+
+      if (!syllabusMap[syllabusId]) {
+        syllabusMap[syllabusId] = {
+          syllabusId,
+          syllabusName,
+          total: 0,
+          completed: 0,
+          inProgress: 0,
+          pending: 0,
+        };
+      }
+
+      syllabusMap[syllabusId].total += 1;
+
+      if (topic.completionStatus === "Completed") {
+        syllabusMap[syllabusId].completed += 1;
+      } else if (topic.completionStatus === "In Progress") {
+        syllabusMap[syllabusId].inProgress += 1;
+      } else {
+        syllabusMap[syllabusId].pending += 1;
+      }
+    });
+
+    const syllabusBreakdown = Object.values(syllabusMap).map((entry) => ({
+      ...entry,
+      completionRate:
+        entry.total > 0
+          ? Math.round((entry.completed / entry.total) * 100)
+          : 0,
+    }));
+
+    res.json({
+      teacher: {
+        _id: teacher._id,
+        name: teacher.name,
+        email: teacher.email,
+        phone: teacher.phone,
+        subjects: teacher.subjects,
+        profilePhoto: teacher.profilePhoto,
+        isActive: teacher.isActive,
+        createdAt: teacher.createdAt,
+      },
+      topicStats: { total, completed, inProgress, pending, completionRate },
+      syllabusBreakdown,
+    });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+};
+
+/* ============================================================
+   ADMIN: UPLOAD / UPDATE TEACHER PROFILE PHOTO
+   PATCH /teachers/:teacherId/photo
+   Body: { photo: "<base64 data-url string>" }
+============================================================ */
+export const uploadTeacherPhoto = async (req, res) => {
+  try {
+    const { teacherId } = req.params;
+    const { photo } = req.body;
+
+    if (!photo) {
+      return res.status(400).json({ message: "No photo provided" });
+    }
+
+    // Basic validation — must be a base64 data URL
+    if (!photo.startsWith("data:image/")) {
+      return res
+        .status(400)
+        .json({ message: "Invalid image format. Must be a base64 data URL." });
+    }
+
+    // Rough size guard: base64 encoded ~750KB ≈ 1MB raw
+    const base64Data = photo.split(",")[1] || "";
+    const sizeInBytes = Math.round((base64Data.length * 3) / 4);
+    if (sizeInBytes > 750_000) {
+      return res
+        .status(400)
+        .json({ message: "Image too large. Maximum size is 750 KB." });
+    }
+
+    const teacher = await Teacher.findByIdAndUpdate(
+      teacherId,
+      { profilePhoto: photo },
+      { new: true }
+    ).select("-password");
+
+    if (!teacher) {
+      return res.status(404).json({ message: "Teacher not found" });
+    }
+
+    res.json({ message: "Profile photo updated", profilePhoto: teacher.profilePhoto });
   } catch (err) {
     res.status(500).json({ message: err.message });
   }

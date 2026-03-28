@@ -11,6 +11,9 @@ import {
   changeTeacherPassword,
   getTeacherStats,
   updateTeacherProfile,
+  getTeacherById,
+  getTeacherProgressForAdmin,
+  uploadTeacherPhoto,
 } from "../controllers/teacher.controller.js";
 
 import { verifyToken, isAdmin } from "../middleware/auth.middleware.js";
@@ -31,5 +34,11 @@ router.get("/profile", verifyToken, getTeacherProfile);
 router.patch("/profile", verifyToken, updateTeacherProfile);
 router.patch("/change-password", verifyToken, changeTeacherPassword);
 router.get("/stats", verifyToken, getTeacherStats);
+
+// ===== ADMIN: SINGLE TEACHER PROFILE & PROGRESS =====
+// NOTE: these must be declared AFTER fixed-path routes to avoid conflicts
+router.get("/:teacherId", verifyToken, isAdmin, getTeacherById);
+router.get("/:teacherId/progress", verifyToken, isAdmin, getTeacherProgressForAdmin);
+router.patch("/:teacherId/photo", verifyToken, isAdmin, uploadTeacherPhoto);
 
 export default router;
