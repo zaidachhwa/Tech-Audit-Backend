@@ -109,7 +109,7 @@ export const getAllReports = async (req, res) => {
     const filtered = reports.filter((r) => {
       if (!r.student) return false;
       if (batch_name && r.student.batch_name !== batch_name) return false;
-      if (batch_no && Number(r.student.batch_no) !== Number(batch_no))
+      if (batch_no && String(r.student.batch_no) !== String(batch_no))
         return false;
       return true;
     });

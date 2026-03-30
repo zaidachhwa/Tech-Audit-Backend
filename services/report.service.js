@@ -58,7 +58,7 @@ export const getBatchAveragesService = async ({
       {
         $match: {
           "student.batch_name": batch_name,
-          "student.batch_no": Number(batch_no),
+          "student.batch_no": batch_no,
           auditDate: { $gte: start, $lte: end },
         },
       },
@@ -105,7 +105,7 @@ export const getBatchAveragesService = async ({
     {
       $match: {
         "student.batch_name": batch_name,
-        "student.batch_no": Number(batch_no),
+        "student.batch_no": batch_no,
       },
     },
     { $sort: { auditDate: -1 } }, // latest first

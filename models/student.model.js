@@ -3,10 +3,11 @@ import mongoose from "mongoose";
 const studentSchema = new mongoose.Schema(
   {
     name: { type: String, required: true },
+    profilePhoto: { type: String, default: "" },
     email: { type: String, required: true, unique: true },
     password: { type: String, required: true },
     batch_name: { type: String, required: true },
-    batch_no: { type: Number, required: true },
+    batch_no: { type: String, required: true },
     reports: [{ type: mongoose.Schema.Types.ObjectId, ref: "Report" }],
     projects: [{ type: mongoose.Schema.Types.ObjectId, ref: "Project" }],
     role: { type: String, default: "student" },

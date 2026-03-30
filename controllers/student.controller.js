@@ -295,3 +295,49 @@ export const updateMe = async (req, res) => {
     return res.status(500).json({ message: err.message });
   }
 };
+
+/* ============================================================
+   UPLOAD / UPDATE STUDENT PROFILE PHOTO
+   PATCH /students/:id/photo or /students/me/photo
+   Body: { photo: "<base64 data-url string>" }
+============================================================ */
+export const uploadStudentPhoto = async (req, res) => {
+  try {
+    // allow either an admin params.id or auth user.id
+    const studentId = req.params.id === "me" ? req.user?.id : req.params.id;
+    if (!studentId) return res.status(401).json({ message: "Unauthorized" });
+
+    const { photo } = req.body;
+    if (!photo) {
+      return res.status(400).json({ message: "No photo provided" });
+    }
+
+    if (!photo.startsWith("data:image/")) {
+      return res
+        .status(400)
+        .json({ message: "Invalid image format. Must be a base64 data URL." });
+    }
+
+    const base64Data = photo.split(",")[1] || "";
+    const sizeInBytes = Math.round((base64Data.length * 3) / 4);
+    if (sizeInBytes > 750_000) {
+      return res
+        .status(400)
+        .json({ message: "Image too large. Maximum size is 750 KB." });
+    }
+
+    const student = await Student.findByIdAndUpdate(
+      studentId,
+      { profilePhoto: photo },
+      { new: true }
+    ).select("-password");
+
+    if (!student) {
+      return res.status(404).json({ message: "Student not found" });
+    }
+
+    res.json({ message: "Profile photo updated", profilePhoto: student.profilePhoto });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+};
