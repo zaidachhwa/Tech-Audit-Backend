@@ -10,6 +10,7 @@ import projectRoutes from "./routes/project.routes.js";
 import reportRoutes from "./routes/report.routes.js";
 import teacherRoutes from "./routes/teacher.routes.js";
 import syllabusRoutes from "./routes/syllabus.routes.js";
+import analyticsRoutes from "./routes/analytics.routes.js";
 
 import { errorHandler } from "./middleware/error.middleware.js";
 import {
@@ -43,6 +44,8 @@ app.use("/api/projects", projectRoutes);
 app.use("/api/reports", reportRoutes);
 app.use("/api/teachers", teacherRoutes);
 app.use("/api/syllabus", syllabusRoutes);
+
+app.use("/api/analytics", analyticsRoutes);
 
 // ERROR HANDLER
 app.use(errorHandler);
