@@ -12,6 +12,11 @@ import teacherRoutes from "./routes/teacher.routes.js";
 import syllabusRoutes from "./routes/syllabus.routes.js";
 import analyticsRoutes from "./routes/analytics.routes.js";
 
+import attendanceRoutes from "./routes/attendance.routes.js";
+import gradeRoutes from "./routes/grade.routes.js";
+import announcementRoutes from "./routes/announcement.routes.js";
+
+
 import { errorHandler } from "./middleware/error.middleware.js";
 import {
   MONGODB_URL,
@@ -46,7 +51,9 @@ app.use("/api/teachers", teacherRoutes);
 app.use("/api/syllabus", syllabusRoutes);
 
 app.use("/api/analytics", analyticsRoutes);
-
+app.use("/api/attendance", attendanceRoutes);
+app.use("/api/grades", gradeRoutes);
+app.use("/api/announcements", announcementRoutes);
 // ERROR HANDLER
 app.use(errorHandler);
 
