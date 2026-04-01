@@ -24,7 +24,7 @@ router.patch("/me", verifyToken, updateMe);
 router.patch("/me/photo", verifyToken, uploadStudentPhoto);
 
 // ADMIN protected routes
-router.get("/list", verifyToken, isAdmin, getAllStudents);
+router.get("/list", verifyToken, getAllStudents);
 router.get("/:id", verifyToken, isAdmin, getStudentById);
 router.patch("/update/:id", verifyToken, isAdmin, updateStudent);
 router.patch("/:id/photo", verifyToken, isAdmin, uploadStudentPhoto);
