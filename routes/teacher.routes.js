@@ -17,7 +17,7 @@ import {
 } from "../controllers/teacher.controller.js";
 
 import { verifyToken, isAdmin } from "../middleware/auth.middleware.js";
-
+import { toggleTeacherStatus } from "../controllers/teacher.controller.js";
 const router = express.Router();
 
 router.post("/register", registerTeacher);
@@ -41,4 +41,5 @@ router.get("/:teacherId", verifyToken, isAdmin, getTeacherById);
 router.get("/:teacherId/progress", verifyToken, isAdmin, getTeacherProgressForAdmin);
 router.patch("/:teacherId/photo", verifyToken, isAdmin, uploadTeacherPhoto);
 
+router.patch("/toggle/:id", toggleTeacherStatus);
 export default router;

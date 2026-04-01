@@ -167,7 +167,30 @@ export const updateTeacher = async (req, res) => {
     return res.status(500).json({ message: err.message });
   }
 };
+// =====================================
+// ADMIN: TOGGLE TEACHER STATUS
+// =====================================
+export const toggleTeacherStatus = async (req, res) => {
+  try {
+    const { id } = req.params;
 
+    const teacher = await Teacher.findById(id);
+    if (!teacher) {
+      return res.status(404).json({ message: "Teacher not found" });
+    }
+
+    teacher.isActive = !teacher.isActive;
+    await teacher.save();
+
+    res.json({
+      message: "Status updated",
+      teacher,
+    });
+  } catch (error) {
+    console.log(error);
+    res.status(500).json({ message: "Server error" });
+  }
+};
 /* =====================================
    ADMIN: DELETE TEACHER
 ===================================== */
