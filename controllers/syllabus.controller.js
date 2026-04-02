@@ -239,6 +239,47 @@ export const assignTeacherToBatchTopic = async (req, res) => {
 };
 
 /**
+ * Assign teacher to a template topic
+ */
+export const assignTeacherToTopic = async (req, res) => {
+  try {
+    const { topicId, teacherId } = req.body;
+
+    if (!topicId || !teacherId) {
+      return res.status(400).json({
+        message: "topicId and teacherId required",
+      });
+    }
+
+    // Verify teacher exists
+    const teacher = await Teacher.findById(teacherId);
+    if (!teacher) {
+      return res.status(404).json({ message: "Teacher not found" });
+    }
+
+    // Update topic
+    const topic = await Topic.findByIdAndUpdate(
+      topicId,
+      { assignedTo: teacherId },
+      { new: true }
+    )
+      .populate("assignedTo", "name email phone")
+      .populate("syllabus", "subject");
+
+    if (!topic) {
+      return res.status(404).json({ message: "Topic not found" });
+    }
+
+    res.json({
+      message: "Teacher assigned to topic successfully",
+      topic,
+    });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+};
+
+/**
  * Get all batch syllabus instances
  */
 export const getBatchSyllabi = async (req, res) => {
