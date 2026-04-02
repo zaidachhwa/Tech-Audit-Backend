@@ -136,3 +136,28 @@ export const getAnalytics = async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 };
+
+const Student = require("../models/student.model");
+const Report = require("../models/report.model");
+const Project = require("../models/project.model");
+
+exports.getAnalytics = async (req, res) => {
+  try {
+    const totalStudents = await Student.countDocuments();
+    const totalReports = await Report.countDocuments();
+    const totalProjects = await Project.countDocuments();
+
+    // dummy avg score (replace later)
+    const avgScore = 75;
+
+    res.json({
+      avgScore,
+      totalReports,
+      totalProjects,
+      totalStudents,
+    });
+  } catch (err) {
+    console.log(err);
+    res.status(500).json({ message: "Server error" });
+  }
+};
