@@ -6,7 +6,10 @@ export const updateSyllabusService = async (id, data) => {
   return await Syllabus.findByIdAndUpdate(id, data, {
     new: true,
     runValidators: true,
-  });
+  })
+    .populate("topics")
+    .populate("assignedTeacher", "name email phone")
+    .populate("createdBy", "name email");
 };
 
 // ✅ DELETE SYLLABUS

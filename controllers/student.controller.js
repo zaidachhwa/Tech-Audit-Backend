@@ -192,7 +192,7 @@ export const deleteStudent = async (req, res) => {
 export const updateStudent = async (req, res) => {
   try {
     const { id } = req.params;
-    const { name, email, batch_name, batch_no } = req.body;
+    const { name, email, password, batch_name, batch_no, isActive } = req.body;
 
     const student = await Student.findById(id);
     if (!student)
@@ -211,8 +211,10 @@ export const updateStudent = async (req, res) => {
 
     if (name) student.name = name;
     if (email) student.email = email;
+    if (password) student.password = await bcrypt.hash(password, 10);
     if (batch_name) student.batch_name = batch_name;
     if (batch_no !== undefined) student.batch_no = batch_no;
+    if (isActive !== undefined) student.isActive = isActive;
 
     await student.save();
 

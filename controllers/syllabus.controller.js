@@ -66,6 +66,7 @@ export const getAllSyllabi = async (req, res) => {
   try {
     const syllabi = await Syllabus.find()
       .populate("topics")
+      .populate("assignedTeacher", "name email phone")
       .populate("createdBy", "name email")
       .sort({ createdAt: -1 });
     res.json({ syllabi });
@@ -81,6 +82,7 @@ export const getSyllabusById = async (req, res) => {
   try {
     const syllabus = await Syllabus.findById(req.params.syllabusId)
       .populate("topics")
+      .populate("assignedTeacher", "name email phone")
       .populate("createdBy", "name email");
 
     if (!syllabus) {
@@ -280,6 +282,57 @@ export const assignTeacherToTopic = async (req, res) => {
 };
 
 /**
+ * Assign teacher to all topics in a syllabus template
+ */
+export const assignTeacherToSyllabus = async (req, res) => {
+  try {
+    const { syllabusId } = req.params;
+    const { teacherId } = req.body;
+
+    if (!syllabusId || !teacherId) {
+      return res.status(400).json({
+        message: "syllabusId and teacherId required",
+      });
+    }
+
+    // Verify teacher exists
+    const teacher = await Teacher.findById(teacherId);
+    if (!teacher) {
+      return res.status(404).json({ message: "Teacher not found" });
+    }
+
+    // Verify syllabus exists
+    const syllabus = await Syllabus.findById(syllabusId).populate("topics");
+    if (!syllabus) {
+      return res.status(404).json({ message: "Syllabus not found" });
+    }
+
+    // Update syllabus with assigned teacher
+    const updatedSyllabus = await Syllabus.findByIdAndUpdate(
+      syllabusId,
+      { assignedTeacher: teacherId },
+      { new: true }
+    )
+      .populate("topics")
+      .populate("assignedTeacher", "name email phone")
+      .populate("createdBy", "name email");
+
+    // Also update all topics in this syllabus to be assigned to the teacher
+    await Topic.updateMany(
+      { syllabus: syllabusId },
+      { assignedTo: teacherId }
+    );
+
+    res.json({
+      message: `Teacher assigned to syllabus "${syllabus.subject}" and all ${syllabus.topics.length} topics`,
+      syllabus: updatedSyllabus,
+    });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+};
+
+/**
  * Get all batch syllabus instances
  */
 export const getBatchSyllabi = async (req, res) => {
@@ -371,6 +424,7 @@ export const getSyllabusWithProgress = async (req, res) => {
       // Return template info
       const syllabus = await Syllabus.findById(syllabusId)
         .populate("topics")
+        .populate("assignedTeacher", "name email phone")
         .populate("createdBy", "name email");
 
       if (!syllabus) {

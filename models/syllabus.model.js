@@ -7,9 +7,11 @@ const syllabusSchema = new mongoose.Schema(
 
     topics: [{ type: mongoose.Schema.Types.ObjectId, ref: "Topic" }],
 
-    assignedTeachers: [
-      { type: mongoose.Schema.Types.ObjectId, ref: "Teacher" },
-    ],
+    assignedTeacher: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Teacher",
+      default: null,
+    },
 
     createdBy: {
       type: mongoose.Schema.Types.ObjectId,

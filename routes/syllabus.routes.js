@@ -7,6 +7,7 @@ import {
   assignSyllabusToBatch,
   assignTeacherToBatchTopic,
   assignTeacherToTopic,
+  assignTeacherToSyllabus,
   getBatchSyllabi,
   getBatchTopics,
   getSyllabusWithProgress,
@@ -40,6 +41,7 @@ router.get("/template/:syllabusId", verifyToken, isAdmin, getSyllabusById);
 router.post("/assign-to-batch", verifyToken, isAdmin, assignSyllabusToBatch);
 router.post("/assign-teacher", verifyToken, isAdmin, assignTeacherToBatchTopic);
 router.patch("/assign-topic", verifyToken, isAdmin, assignTeacherToTopic);
+router.patch("/:syllabusId/assign-teacher", verifyToken, isAdmin, assignTeacherToSyllabus);
 router.get("/batch-instances", verifyToken, isAdmin, getBatchSyllabi);
 router.get("/batch-topics", verifyToken, isAdmin, getBatchTopics);
 router.delete(
