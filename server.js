@@ -9,6 +9,7 @@ import projectRoutes from "./routes/project.routes.js";
 import reportRoutes from "./routes/report.routes.js";
 import teacherRoutes from "./routes/teacher.routes.js";
 import syllabusRoutes from "./routes/syllabus.routes.js";
+import analyticsRoutes from "./routes/analytics.routes.js";
 import assignmentRoutes from "./routes/assignment.routes.js";
 import { errorHandler } from "./middleware/error.middleware.js";
 import {
@@ -18,7 +19,7 @@ import {
   DEPLOYED_CORS_ORIGIN,
 } from "./config/env.js";
 
-
+  
 
 const app = express();
 app.use(express.json({ limit: "5mb" }));
@@ -44,7 +45,8 @@ app.use("/api/projects", projectRoutes);
 app.use("/api/reports", reportRoutes);
 app.use("/api/teachers", teacherRoutes);
 app.use("/api/syllabus", syllabusRoutes);
-app.use("/api/assignments", assignmentRoutes);
+app.use("/api/analytics", analyticsRoutes);
+app.use("/api/assignment", assignmentRoutes);
 
 // ERROR HANDLER
 app.use(errorHandler);

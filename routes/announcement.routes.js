@@ -1,14 +1,13 @@
-import express from "express";
-import {
-createAnnouncement,
-getAnnouncements,
-deleteAnnouncement,
+import {createAnnouncement,
+  getAnnouncements,
+  deleteAnnouncement,
 } from "../controllers/announcement.controller.js";
+import { verifyToken } from "../middleware/auth.middleware.js";
 
 const router = express.Router();
 
-router.get("/", getAnnouncements);
-router.post("/", createAnnouncement);
-router.delete("/:id", deleteAnnouncement);
+router.post("/", verifyToken, createAnnouncement);
+router.get("/", verifyToken, getAnnouncements);
+router.delete("/:id", verifyToken, deleteAnnouncement);
 
 export default router;

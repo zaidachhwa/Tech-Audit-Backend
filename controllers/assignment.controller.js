@@ -1,6 +1,9 @@
 import Assignment from "../models/assignment.model.js";
 import Student from "../models/student.model.js";
 
+// Normalize batch names (match frontend cleanup)
+const cleanBatchName = (name) => name?.replace(/\s+/g, "").toUpperCase();
+
 export const createAssignment = async (req, res) => {
   try {
     console.log("REQ BODY:", req.body);
@@ -49,37 +52,67 @@ export const createAssignment = async (req, res) => {
       });
     }
 
-    // =========================
-    // 🔹 BATCH ASSIGNMENT
-    // =========================
-    if (mode === "batch") {
-      const students = await Student.find({
-        batchName,
-        batchNumber,
-      }).select("_id");
+      // =========================
+      // 🔹 BATCH ASSIGNMENT
+      // =========================
+      if (mode === "batch") {
+        // student documents use `batch_name` and `batch_no` (strings)
+        // Try multiple query patterns to find matching students
+        const cleanName = cleanBatchName(batchName);
+        
+        // Debug: log what we're searching for
+        console.log("🔍 BATCH QUERY DEBUG:", {
+          cleanName,
+          batchNumber,
+          batchNumberStr: String(batchNumber),
+        });
+        
+        // Try flexible matching: case-insensitive, with/without spaces
+        let students = await Student.find({
+          batch_name: new RegExp(`^${cleanName.replace(/\s/g, "")}$`, "i"),
+          batch_no: String(batchNumber),
+        }).select("_id");
 
-      if (!students.length) {
-        return res.status(404).json({ message: "No students found" });
+        // If not found, try querying by batchNumber as number
+        if (!students.length) {
+          console.log("❌ Regex match failed, trying number match...");
+          students = await Student.find({
+            batch_name: new RegExp(`^${cleanName.replace(/\s/g, "")}$`, "i"),
+            batch_no: batchNumber,
+          }).select("_id");
+        }
+
+        // If still not found, log sample students for debugging
+        if (!students.length) {
+          const samples = await Student.find().limit(2).select("batch_name batch_no name");
+          console.log("❌ NO STUDENTS FOUND. Sample data:", samples);
+          return res.status(404).json({ 
+            message: "No students found",
+            debugInfo: { cleanName, batchNumber, queriedFor: `batch_name: ${cleanName}, batch_no: ${batchNumber}` },
+            samples,
+          });
+        }
+
+        console.log("✅ Found", students.length, "students");
+
+        const assignments = students.map((s) => ({
+          batchName,
+          batchNumber,
+          student: s._id,
+          parameters: cleanParams,
+          date,
+          comment,
+        }));
+
+        await Assignment.insertMany(assignments);
+
+        return res.status(201).json({
+          message: `Assigned to ${students.length} students`,
+        });
       }
 
-      const assignments = students.map((s) => ({
-        batchName,
-        batchNumber,
-        student: s._id,
-        parameters: cleanParams,
-        date,
-        comment,
-      }));
-
-      await Assignment.insertMany(assignments);
-
-      return res.status(201).json({
-        message: `Assigned to ${students.length} students`,
-      });
-    }
-
-    // ❌ INVALID MODE
-    return res.status(400).json({ message: "Invalid mode" });
+      // ❌ INVALID MODE
+      return res.status(400).json({ message: "Invalid mode" });
 
   } catch (err) {
     console.error("ASSIGNMENT ERROR:", err);
