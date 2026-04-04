@@ -127,13 +127,13 @@ export const getAllStudents = async (req, res) => {
       ? { name: { $regex: search, $options: "i" } }
       : {};
 
-    // ✅ ADD FILTERING HERE
+    // ✅ ADD FILTERING HERE (case-insensitive to handle mixed casing in DB)
     if (batchName) {
-      q.batch_name = batchName;
+      q.batch_name = { $regex: new RegExp(`^${batchName.trim()}$`, "i") };
     }
 
     if (batchNumber) {
-      q.batch_no = batchNumber;
+      q.batch_no = { $regex: new RegExp(`^${batchNumber.toString().trim()}$`, "i") };
     }
 
     const total = await Student.countDocuments(q);

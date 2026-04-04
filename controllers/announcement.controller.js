@@ -23,7 +23,7 @@ export const createAnnouncement = async (req, res) => {
   }
 };
 
-export const getAnnouncements = async (req, res) => {
+export const getAnnouncement = async (req, res) => {
   try {
     const teacherId = req.user.id;
     const announcements = await Announcement.find({ teacher: teacherId })

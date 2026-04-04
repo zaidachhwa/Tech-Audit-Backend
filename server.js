@@ -11,6 +11,7 @@ import teacherRoutes from "./routes/teacher.routes.js";
 import syllabusRoutes from "./routes/syllabus.routes.js";
 import analyticsRoutes from "./routes/analytics.routes.js";
 import assignmentRoutes from "./routes/assignment.routes.js";
+import announcementRoutes from "./routes/announcement.routes.js";
 import { errorHandler } from "./middleware/error.middleware.js";
 import {
   MONGODB_URL,
@@ -19,7 +20,8 @@ import {
   DEPLOYED_CORS_ORIGIN,
 } from "./config/env.js";
 
-  
+
+
 
 const app = express();
 app.use(express.json({ limit: "5mb" }));
@@ -47,7 +49,7 @@ app.use("/api/teachers", teacherRoutes);
 app.use("/api/syllabus", syllabusRoutes);
 app.use("/api/analytics", analyticsRoutes);
 app.use("/api/assignment", assignmentRoutes);
-
+app.use("/api/announcement", announcementRoutes);
 // ERROR HANDLER
 app.use(errorHandler);
 
