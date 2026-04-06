@@ -2,7 +2,7 @@ import mongoose from "mongoose";
 
 const assignmentSchema = new mongoose.Schema({
     batchName: String,
-    batchNumber: Number,
+    batchNumber: String,
     student: { type: mongoose.Schema.Types.ObjectId, ref: "Student" },
     parameters: [
         {
@@ -10,10 +10,11 @@ const assignmentSchema = new mongoose.Schema({
             score: Number,
         },
     ],
+    date: { type: Date },
     comment: {
-  type: String,
-  default: "",
-},
-});
+        type: String,
+        default: "",
+    },
+}, { timestamps: true });
 
 export default mongoose.model("Assignment", assignmentSchema);

@@ -137,3 +137,19 @@ export const getAssignmentsByBatch = async (req, res) => {
     return res.status(500).json({ message: err.message || "Server error" });
   }
 };
+
+// GET all assignments for the logged-in student
+export const getMyAssignments = async (req, res) => {
+  try {
+    const studentId = req.user.id;
+
+    const assignments = await Assignment.find({ student: studentId })
+      .sort({ createdAt: -1 })
+      .lean();
+
+    return res.status(200).json({ count: assignments.length, assignments });
+  } catch (err) {
+    console.error("GET MY ASSIGNMENTS ERROR:", err);
+    return res.status(500).json({ message: err.message || "Server error" });
+  }
+};
