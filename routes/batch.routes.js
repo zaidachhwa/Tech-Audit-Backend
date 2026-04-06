@@ -21,6 +21,7 @@ router.get("/public", getPublicBatches);
 // ================= ADMIN =================
 router.post("/create", verifyToken, isAdmin, createBatch);
 router.get("/", verifyToken, isAdmin, getAllBatches);
+router.get("/:id/students", verifyToken, getBatchById);  // teachers can access this
 router.get("/:id", verifyToken, isAdmin, getBatchById);
 router.put("/:id/add-student", verifyToken, isAdmin, addStudentToBatch);
 router.put("/:id", verifyToken, isAdmin, updateBatch);
