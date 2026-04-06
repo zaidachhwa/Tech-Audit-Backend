@@ -2,7 +2,7 @@ import mongoose from "mongoose";
 
 const assignmentSchema = new mongoose.Schema({
     batchName: String,
-    batchNumber: String,
+    batchNumber: Number,
     student: { type: mongoose.Schema.Types.ObjectId, ref: "Student" },
     parameters: [
         {
@@ -10,7 +10,10 @@ const assignmentSchema = new mongoose.Schema({
             score: Number,
         },
     ],
-    date: { type: Date },
+    date: {
+        type: Date,
+        default: Date.now,
+    },
     comment: {
         type: String,
         default: "",
