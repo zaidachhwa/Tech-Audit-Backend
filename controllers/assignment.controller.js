@@ -153,3 +153,31 @@ export const getMyAssignments = async (req, res) => {
     return res.status(500).json({ message: err.message || "Server error" });
   }
 };
+
+// PATCH assignment status by student
+export const updateAssignmentStatus = async (req, res) => {
+  try {
+    const { assignmentId } = req.params;
+    const { status } = req.body;
+    const studentId = req.user.id;
+
+    if (!["Pending", "Done"].includes(status)) {
+        return res.status(400).json({ message: "Invalid status" });
+    }
+
+    const assignment = await Assignment.findOneAndUpdate(
+        { _id: assignmentId, student: studentId },
+        { status },
+        { new: true }
+    );
+
+    if (!assignment) {
+        return res.status(404).json({ message: "Assignment not found or unauthorized" });
+    }
+
+    return res.status(200).json({ message: "Status updated", assignment });
+  } catch (err) {
+    console.error("UPDATE STATUS ERROR:", err);
+    return res.status(500).json({ message: err.message || "Server error" });
+  }
+};

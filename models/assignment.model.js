@@ -15,6 +15,11 @@ const assignmentSchema = new mongoose.Schema({
         type: String,
         default: "",
     },
+    status: {
+        type: String,
+        enum: ["Pending", "Done"],
+        default: "Pending"
+    }
 }, { timestamps: true });
 
 export default mongoose.model("Assignment", assignmentSchema);
