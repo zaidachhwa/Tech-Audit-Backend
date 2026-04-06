@@ -10,10 +10,14 @@ const assignmentSchema = new mongoose.Schema({
             score: Number,
         },
     ],
+    date: {
+        type: Date,
+        default: Date.now,
+    },
     comment: {
-  type: String,
-  default: "",
-},
+        type: String,
+        default: "",
+    },
 });
 
 export default mongoose.model("Assignment", assignmentSchema);
