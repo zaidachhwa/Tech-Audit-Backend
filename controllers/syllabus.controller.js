@@ -482,9 +482,10 @@ export const markTopicCompleted = async (req, res) => {
       return res.status(404).json({ message: "Topic not found" });
     }
 
-    // Permission check
+    // Permission check: only block if topic is explicitly assigned to a DIFFERENT teacher
     if (
       req.user.role === "teacher" &&
+      batchTopic.assignedTo &&
       String(batchTopic.assignedTo) !== String(req.user.id)
     ) {
       return res.status(403).json({
@@ -523,9 +524,10 @@ export const updateTopicStatus = async (req, res) => {
       return res.status(404).json({ message: "Topic not found" });
     }
 
-    // Permission check
+    // Permission check: only block if topic is explicitly assigned to a DIFFERENT teacher
     if (
       req.user.role === "teacher" &&
+      batchTopic.assignedTo &&
       String(batchTopic.assignedTo) !== String(req.user.id)
     ) {
       return res.status(403).json({
@@ -564,9 +566,10 @@ export const addTopicRemark = async (req, res) => {
       return res.status(404).json({ message: "Topic not found" });
     }
 
-    // Permission check
+    // Permission check: only block if topic is explicitly assigned to a DIFFERENT teacher
     if (
       req.user.role === "teacher" &&
+      batchTopic.assignedTo &&
       String(batchTopic.assignedTo) !== String(req.user.id)
     ) {
       return res.status(403).json({
