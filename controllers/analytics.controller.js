@@ -19,7 +19,7 @@ export const getAnalytics = async (req, res) => {
 
     const avgScore = Number((avgScoreRaw * 10).toFixed(2));
 
-    // 🔹 2. Student Performance (FIRST DECLARE)
+    // 🔹 2. Student Performance
     let studentPerformance = await Report.aggregate([
       { $unwind: "$parameters" },
       {
@@ -46,7 +46,6 @@ export const getAnalytics = async (req, res) => {
       { $sort: { avgScore: -1 } }
     ]);
 
-    // rounding
     studentPerformance = studentPerformance.map(s => ({
       ...s,
       avgScore: Number(s.avgScore.toFixed(2))
@@ -56,7 +55,9 @@ export const getAnalytics = async (req, res) => {
     const topStudents = studentPerformance.slice(0, 5);
     const weakStudents = studentPerformance.filter(s => s.avgScore < 50);
 
-    // 🔹 4. Batch Performance (CORRECT LOGIC WITH LOOKUP)
+    // 🔹 4. Batch Performance
+    // Students store batch info as strings (batch_name, batch_no) — NOT as an ObjectId ref.
+    // We group directly from student.batch_name + student.batch_no.
     let batchPerformance = await Report.aggregate([
       {
         $lookup: {
@@ -67,52 +68,32 @@ export const getAnalytics = async (req, res) => {
         }
       },
       { $unwind: "$student" },
-
-      {
-        $lookup: {
-          from: "batches",
-          localField: "student.batch",   // ✅ NEW (important)
-          foreignField: "_id",
-          as: "batch"
-        }
-      },
-      { $unwind: "$batch" },
-
       { $unwind: "$parameters" },
-
       {
         $group: {
           _id: {
-            name: "$batch.batch_name",
-            number: "$batch.batch_no"
+            name: "$student.batch_name",
+            number: "$student.batch_no"
           },
           avgScore: { $avg: "$parameters.score" }
         }
       },
-
       {
         $project: {
           _id: 0,
           batch: {
             $concat: [
-              "$_id.name",
+              { $ifNull: ["$_id.name", "Unknown"] },
               " #",
-              { $toString: "$_id.number" }
+              { $toString: { $ifNull: ["$_id.number", "?"] } }
             ]
           },
           avgScore: { $multiply: ["$avgScore", 10] }
         }
       },
-
-      { $sort: { avgScore: -1 } }
+      { $sort: { batch: 1 } }
     ]);
 
-    batchPerformance = batchPerformance.map(b => ({
-      ...b,
-      avgScore: Number(b.avgScore.toFixed(2))
-    }));
-
-    // rounding (ONLY ONCE)
     batchPerformance = batchPerformance.map(b => ({
       ...b,
       avgScore: Number(b.avgScore.toFixed(2))
