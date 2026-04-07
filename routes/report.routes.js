@@ -13,17 +13,17 @@ import {
   deleteReport,
 } from "../controllers/report.controller.js";
 
-import { verifyToken, isAdmin } from "../middleware/auth.middleware.js";
+import { verifyToken, isAdmin, isAdminOrTeacher } from "../middleware/auth.middleware.js";
 
 const router = express.Router();
 
 /* ================= NORMAL REPORTS ================= */
 
-router.post("/create", verifyToken, isAdmin, createReport);
+router.post("/create", verifyToken, isAdminOrTeacher, createReport);
 
-router.get("/", verifyToken, isAdmin, getAllReports);
+router.get("/", verifyToken, isAdminOrTeacher, getAllReports);
 
-router.get("/batch/average", verifyToken, isAdmin, getBatchAverages);
+router.get("/batch/average", verifyToken, isAdminOrTeacher, getBatchAverages);
 
 router.get(
   "/student/:studentId",
@@ -47,17 +47,17 @@ router.post("/preview", generateReportPreviewPdf);
 /* ================= DRAFT ROUTES ================= */
 
 // ⭐ draft save / update
-router.post("/draft", verifyToken, isAdmin, saveDraftReport);
+router.post("/draft", verifyToken, isAdminOrTeacher, saveDraftReport);
 
 // ⭐ specific draft fetch (student + date)
-router.get("/draft", verifyToken, isAdmin, getDraftReport);
+router.get("/draft", verifyToken, isAdminOrTeacher, getDraftReport);
 
 // ⭐ all drafts list (admin panel)
-router.get("/drafts", verifyToken, isAdmin, getAllDrafts);
+router.get("/drafts", verifyToken, isAdminOrTeacher, getAllDrafts);
 
 // ⭐ delete draft
-router.delete("/draft/:id", verifyToken, isAdmin, deleteDraft);
+router.delete("/draft/:id", verifyToken, isAdminOrTeacher, deleteDraft);
 
-router.delete("/:id", verifyToken, isAdmin, deleteReport);
+router.delete("/:id", verifyToken, isAdminOrTeacher, deleteReport);
 
 export default router;
