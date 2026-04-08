@@ -53,7 +53,22 @@ export const addTopic = async (req, res) => {
       $push: { topics: topic._id },
     });
 
-    res.status(201).json({ message: "Topic added to template", topic });
+    // Also propagate this topic to any batches that already have this syllabus
+    const activeBatchSyllabi = await BatchSyllabus.find({ syllabus: syllabusId });
+    if (activeBatchSyllabi.length > 0) {
+      const batchTopicDocs = activeBatchSyllabi.map(bs => ({
+        batch: bs.batch,
+        syllabus: bs.syllabus,
+        templateTopic: topic._id,
+        title: topic.title,
+        description: topic.description,
+        dueDate: topic.dueDate,
+        completionStatus: "Pending"
+      }));
+      await BatchTopic.insertMany(batchTopicDocs);
+    }
+
+    res.status(201).json({ message: "Topic added to template and propagated", topic });
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
@@ -148,28 +163,23 @@ export const assignSyllabusToBatch = async (req, res) => {
       dueDate: dueDate,
     });
 
-    // Get template topics
+    // Get template topics (if any exist already)
     const templateTopics = await Topic.find({ syllabus: syllabusId });
 
-    if (templateTopics.length === 0) {
-      return res.status(400).json({
-        message: "Syllabus has no topics to assign",
-      });
+    // Only create batch topic copies if topics already exist
+    let createdBatchTopics = [];
+    if (templateTopics.length > 0) {
+      const batchTopicDocs = templateTopics.map((topic) => ({
+        batch: batchId,
+        syllabus: syllabusId,
+        templateTopic: topic._id,
+        title: topic.title,
+        description: topic.description,
+        dueDate: topic.dueDate,
+        completionStatus: "Pending",
+      }));
+      createdBatchTopics = await BatchTopic.insertMany(batchTopicDocs);
     }
-
-    // Create batch-specific topic copies
-    const batchTopicDocs = templateTopics.map((topic) => ({
-      batch: batchId,
-      syllabus: syllabusId,
-      templateTopic: topic._id,
-      title: topic.title,
-      description: topic.description,
-      dueDate: topic.dueDate,
-      completionStatus: "Pending",
-      // assignedTo will be set later by admin
-    }));
-
-    const createdBatchTopics = await BatchTopic.insertMany(batchTopicDocs);
 
     res.status(201).json({
       message: "Syllabus assigned to batch successfully",

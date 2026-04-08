@@ -27,18 +27,19 @@ import {
   verifyToken,
   isAdmin,
   isTeacher,
+  isAdminOrTeacher,
 } from "../middleware/auth.middleware.js";
 
 const router = express.Router();
 
 // ===== ADMIN - TEMPLATE MANAGEMENT =====
-router.post("/create", verifyToken, isAdmin, createSyllabus);
-router.post("/topic", verifyToken, isAdmin, addTopic);
+router.post("/create", verifyToken, isAdminOrTeacher, createSyllabus);
+router.post("/topic", verifyToken, isAdminOrTeacher, addTopic);
 router.get("/all", verifyToken, isAdmin, getAllSyllabi);
 router.get("/template/:syllabusId", verifyToken, isAdmin, getSyllabusById);
 
 // ===== ADMIN - BATCH ASSIGNMENT =====
-router.post("/assign-to-batch", verifyToken, isAdmin, assignSyllabusToBatch);
+router.post("/assign-to-batch", verifyToken, isAdminOrTeacher, assignSyllabusToBatch);
 router.post("/assign-teacher", verifyToken, isAdmin, assignTeacherToBatchTopic);
 router.patch("/assign-topic", verifyToken, isAdmin, assignTeacherToTopic);
 router.patch("/:syllabusId/assign-teacher", verifyToken, isAdmin, assignTeacherToSyllabus);
@@ -62,7 +63,7 @@ router.get(
 router.put(
   "/template/:syllabusId",
   verifyToken,
-  isAdmin,
+  isAdminOrTeacher,
   updateSyllabus
 );
 
@@ -70,7 +71,7 @@ router.put(
 router.delete(
   "/template/:syllabusId",
   verifyToken,
-  isAdmin,
+  isAdminOrTeacher,
   deleteSyllabus
 );
 
@@ -78,7 +79,7 @@ router.delete(
 router.put(
   "/topic/:topicId",
   verifyToken,
-  isAdmin,
+  isAdminOrTeacher,
   updateTopic
 );
 
@@ -86,7 +87,7 @@ router.put(
 router.delete(
   "/topic/:topicId",
   verifyToken,
-  isAdmin,
+  isAdminOrTeacher,
   deleteTopic
 );
 
