@@ -254,7 +254,7 @@ export const generateReportPdf = async (req, res) => {
 
     doc
       .fontSize(14)
-      .fillColor("#059669")
+      .fillColor("#000")
       .font("Helvetica-Bold")
       .text(report.student.name, 50, startY + 20);
 
@@ -316,7 +316,7 @@ export const generateReportPdf = async (req, res) => {
     // Section title
     doc
       .fontSize(12)
-      .fillColor("#059669")
+      .fillColor("#000")
       .font("Helvetica-Bold")
       .text("Performance Parameters", 50);
 
@@ -393,7 +393,7 @@ export const generateReportPdf = async (req, res) => {
     // Section title
     doc
       .fontSize(12)
-      .fillColor("#059669")
+      .fillColor("#000")
       .font("Helvetica-Bold")
       .text("Overall Remarks", 50);
 
@@ -448,7 +448,7 @@ export const generateReportPdf = async (req, res) => {
 
     doc
       .fontSize(12)
-      .fillColor("#059669")
+      .fillColor("#000")
       .font("Helvetica-Bold")
       .text("Feedback Points", 50);
 
@@ -593,7 +593,7 @@ export const generateReportPreviewPdf = async (req, res) => {
 
     doc
       .fontSize(14)
-      .fillColor("#059669")
+      .fillColor("#23a9de")
       .font("Helvetica-Bold")
       .text(student.name, 50, startY + 20);
 
@@ -640,7 +640,7 @@ export const generateReportPreviewPdf = async (req, res) => {
 
     doc
       .fontSize(12)
-      .fillColor("#059669")
+      .fillColor("#000")
       .font("Helvetica-Bold")
       .text("Performance Parameters", 50);
 
@@ -709,7 +709,7 @@ export const generateReportPreviewPdf = async (req, res) => {
 
     doc
       .fontSize(12)
-      .fillColor("#059669")
+      .fillColor("#000")
       .font("Helvetica-Bold")
       .text("Overall Remarks", 50);
 
@@ -748,7 +748,7 @@ export const generateReportPreviewPdf = async (req, res) => {
 
     doc
       .fontSize(12)
-      .fillColor("#059669")
+      .fillColor("#000")
       .font("Helvetica-Bold")
       .text("Feedback Points", 50);
 
