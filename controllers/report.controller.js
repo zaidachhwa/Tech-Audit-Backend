@@ -158,6 +158,39 @@ export const deleteReport = async (req, res) => {
   }
 };
 
+// 🔥 NEW: Lookup existing report/draft for auto-fill feature
+export const lookupReportByStudentAndDate = async (req, res) => {
+  try {
+    const { studentId, auditDate } = req.query;
+
+    if (!studentId || !auditDate) {
+      return res.status(400).json({ message: "studentId and auditDate required" });
+    }
+
+    // Try to find an existing report (prioritize draft if both exist)
+    const report = await Report.findOne({ 
+      student: studentId, 
+      auditDate: new Date(auditDate) 
+    }).sort({ status: 1 }); // "draft" usually comes before "published" alphabetically, but we should be careful. 
+    
+    // Better sorting: drafts usually updated more recently
+    // const report = await Report.findOne({ student: studentId, auditDate: new Date(auditDate) }).sort({ updatedAt: -1 });
+
+    if (!report) return res.json(null);
+
+    // Return the report data for pre-fill
+    return res.json({
+      _id: report._id,
+      status: report.status,
+      parameters: report.parameters,
+      feedbackSchema: report.feedbackSchema?.[0] || { point1: "", point2: "", point3: "" },
+      overallRemarks: report.overallRemarks
+    });
+  } catch (err) {
+    return res.status(500).json({ message: err.message });
+  }
+};
+
 
 
 export const getReportsByStudent = async (req, res) => {

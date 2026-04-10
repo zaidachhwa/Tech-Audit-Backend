@@ -11,6 +11,7 @@ import {
   getAllDrafts,
   deleteDraft,
   deleteReport,
+  lookupReportByStudentAndDate,
 } from "../controllers/report.controller.js";
 
 import { verifyToken, isAdmin, isAdminOrTeacher } from "../middleware/auth.middleware.js";
@@ -57,6 +58,9 @@ router.get("/drafts", verifyToken, isAdminOrTeacher, getAllDrafts);
 
 // ⭐ delete draft
 router.delete("/draft/:id", verifyToken, isAdminOrTeacher, deleteDraft);
+
+// 🔥 lookup route
+router.get("/lookup", verifyToken, isAdminOrTeacher, lookupReportByStudentAndDate);
 
 router.delete("/:id", verifyToken, isAdminOrTeacher, deleteReport);
 
