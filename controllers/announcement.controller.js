@@ -1,4 +1,5 @@
 import { Announcement } from "../models/announcement.model.js";
+import { Student } from "../models/student.model.js";
 
 export const createAnnouncement = async (req, res) => {
   try {
@@ -46,6 +47,30 @@ export const deleteAnnouncement = async (req, res) => {
 
     await Announcement.findByIdAndDelete(id);
     res.json({ message: "Announcement deleted" });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+};
+
+export const getStudentAnnouncements = async (req, res) => {
+  try {
+    const studentId = req.user.id;
+    const student = await Student.findById(studentId);
+    
+    if (!student) {
+      return res.status(404).json({ message: "Student not found" });
+    }
+
+    const announcements = await Announcement.find({
+      $or: [
+        { batch: student.batch_name },
+        { batch: "All Batches" }
+      ]
+    })
+    .populate("teacher", "name profilePhoto")
+    .sort({ createdAt: -1 });
+
+    res.json({ announcements });
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
