@@ -2,6 +2,7 @@ import path from "path";
 import PDFDocument from "pdfkit";
 import * as reportService from "../services/report.service.js";
 import Report from "../models/report.model.js";
+import Student from "../models/student.model.js";
 
 export const createReport = async (req, res) => {
   try {
@@ -128,10 +129,12 @@ export const getAllReports = async (req, res) => {
 export const getAllDrafts = async (req, res) => {
   try {
     const draft = await Report.find({ status: "draft" }) //only drafts reports
-      .populate("student", "name email batch_name batch_no")  //student info join
+      .populate("student", "name email batch_name batch_no") //student info join
       .sort({ updatedAt: -1 }); //latest updated draft on top
 
-    res.json(draft);  //send the list to the frontend table
+    // Defensive check: If some reports have null student (e.g. student deleted), we might want to filter them out or handle them
+    // For now, we return as is, but frontend should handle null student.
+    res.json(draft); //send the list to the frontend table
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
@@ -252,17 +255,22 @@ export const generateReportPdf = async (req, res) => {
     // ---------- Student Info (Left) and Batch Info (Right) ----------
     const startY = doc.y + 70;
 
+    const studentName = report.student?.name || "Student Name Missing";
+    const studentEmail = report.student?.email || "";
+    const batchName = report.student?.batch_name || "N/A";
+    const batchNo = report.student?.batch_no || "N/A";
+
     doc
       .fontSize(14)
       .fillColor("#000")
       .font("Helvetica-Bold")
-      .text(report.student.name, 50, startY + 20);
+      .text(studentName, 50, startY + 20);
 
     doc
       .fontSize(10)
       .fillColor("#666")
       .font("Helvetica")
-      .text(report.student.email, 50, doc.y + 2);
+      .text(studentEmail, 50, doc.y + 2);
 
 
 
@@ -280,11 +288,11 @@ export const generateReportPdf = async (req, res) => {
     doc
       .fontSize(10)
       .fillColor("#000")
-      .text(`Batch : ${report.student.batch_name}`, xRight - columnWidth, startY, {
+      .text(`Batch : ${batchName}`, xRight - columnWidth, startY, {
         width: columnWidth,
         align: "right",
       })
-      .text(`Batch No : ${report.student.batch_no}`, xRight - columnWidth, startY + lineGap, {
+      .text(`Batch No : ${batchNo}`, xRight - columnWidth, startY + lineGap, {
         width: columnWidth,
         align: "right",
       })
@@ -591,17 +599,22 @@ export const generateReportPreviewPdf = async (req, res) => {
     // ---------- Student Info ----------
     const startY = doc.y + 70;
 
+    const studentName = student.name || "Student Name Missing";
+    const studentEmail = student.email || "";
+    const batchName = student.batch_name || "N/A";
+    const batchNo = student.batch_no || "N/A";
+
     doc
       .fontSize(14)
       .fillColor("#23a9de")
       .font("Helvetica-Bold")
-      .text(student.name, 50, startY + 20);
+      .text(studentName, 50, startY + 20);
 
     doc
       .fontSize(10)
       .fillColor("#666")
       .font("Helvetica")
-      .text(student.email, 50, doc.y + 2);
+      .text(studentEmail, 50, doc.y + 2);
 
     const pageWidth = doc.page.width;
     const rightMargin = 40;
@@ -612,11 +625,11 @@ export const generateReportPreviewPdf = async (req, res) => {
     doc
       .fontSize(10)
       .fillColor("#000")
-      .text(`Batch : ${student.batch_name}`, xRight - columnWidth, startY, {
+      .text(`Batch : ${batchName}`, xRight - columnWidth, startY, {
         width: columnWidth,
         align: "right",
       })
-      .text(`Batch No : ${student.batch_no}`, xRight - columnWidth, startY + lineGap, {
+      .text(`Batch No : ${batchNo}`, xRight - columnWidth, startY + lineGap, {
         width: columnWidth,
         align: "right",
       })
