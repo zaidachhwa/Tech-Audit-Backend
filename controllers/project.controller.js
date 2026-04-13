@@ -16,6 +16,7 @@ export const assignProjectToBatch = async (req, res) => {
       skills = [],
       repo = "",
       overallStatus = "Pending",
+      dueDate,
     } = req.body;
 
     if (!batchId || !title || !description || !adminId)
@@ -33,10 +34,12 @@ export const assignProjectToBatch = async (req, res) => {
         batch: batch._id,
         modules,
         createdBy: adminId,
+        creatorModel: req.user?.role === 'teacher' ? 'Teacher' : 'Admin',
         outcomes,
         skills,
         repo,
         overallStatus,
+        dueDate,
       });
       await project.save();
       await Student.findByIdAndUpdate(student._id, {
@@ -67,6 +70,7 @@ export const createProject = async (req, res) => {
       skills = [],
       repo = "",
       overallStatus = "Pending",
+      dueDate,
     } = req.body;
 
     const targetStudent = assignedTo || studentId;
@@ -81,10 +85,12 @@ export const createProject = async (req, res) => {
       assignedTo: targetStudent,
       modules,
       createdBy: req.user?.id || req.body.createdBy,
+      creatorModel: req.user?.role === 'teacher' ? 'Teacher' : 'Admin',
       outcomes,
       skills,
       repo,
       overallStatus,
+      dueDate,
     });
 
     // push to student's projects array

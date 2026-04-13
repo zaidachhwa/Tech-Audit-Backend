@@ -46,11 +46,18 @@ const projectSchema = new mongoose.Schema(
     },
     createdBy: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: "Admin",
       required: true,
+      refPath: "creatorModel",
+    },
+    creatorModel: {
+      type: String,
+      required: true,
+      enum: ["Admin", "Teacher"],
+      default: "Admin",
     },
     outcomes: { type: [outcomeSchema], default: [] },
     skills: { type: [skillSchema], default: [] },
+    dueDate: { type: Date },
   },
   { timestamps: true }
 );
