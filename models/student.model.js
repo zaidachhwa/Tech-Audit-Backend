@@ -11,6 +11,7 @@ const studentSchema = new mongoose.Schema(
     reports: [{ type: mongoose.Schema.Types.ObjectId, ref: "Report" }],
     projects: [{ type: mongoose.Schema.Types.ObjectId, ref: "Project" }],
     role: { type: String, default: "student" },
+    phoneNo: { type: String, default: "" },
     isActive: { type: Boolean, default: false },
   },
   { timestamps: true }
