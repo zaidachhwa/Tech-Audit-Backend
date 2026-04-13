@@ -343,6 +343,52 @@ export const assignTeacherToSyllabus = async (req, res) => {
 };
 
 /**
+ * Unassign teacher from all topics in a syllabus template
+ */
+export const unassignTeacherFromSyllabus = async (req, res) => {
+  try {
+    const { syllabusId } = req.params;
+    const { teacherId } = req.body;
+
+    if (!syllabusId || !teacherId) {
+      return res.status(400).json({
+        message: "syllabusId and teacherId required",
+      });
+    }
+
+    // Verify syllabus exists
+    const syllabus = await Syllabus.findById(syllabusId);
+    if (!syllabus) {
+      return res.status(404).json({ message: "Syllabus not found" });
+    }
+
+    // Update syllabus assigned teacher to null if it matches
+    if (syllabus.assignedTeacher?.toString() === teacherId) {
+      syllabus.assignedTeacher = null;
+      await syllabus.save();
+    }
+
+    // Unassign teacher from all topics in the syllabus
+    await Topic.updateMany(
+      { syllabus: syllabusId, assignedTo: teacherId },
+      { assignedTo: null }
+    );
+    
+    // Also unassign from Batch Topics
+    await BatchTopic.updateMany(
+      { syllabus: syllabusId, assignedTo: teacherId },
+      { assignedTo: null }
+    );
+
+    res.json({
+      message: `Teacher unassigned from syllabus "${syllabus.subject}"`,
+    });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+};
+
+/**
  * Get all batch syllabus instances
  */
 export const getBatchSyllabi = async (req, res) => {
