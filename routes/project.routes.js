@@ -15,20 +15,21 @@ import {
 import {
   verifyToken,
   isAdmin,
+  isAdminOrTeacher,
   isStudent,
 } from "../middleware/auth.middleware.js";
 
 const router = express.Router();
 
 // ===== ADMIN ROUTES =====
-router.post("/assign-to-batch", verifyToken, isAdmin, assignProjectToBatch);
-router.post("/create", verifyToken, isAdmin, createProject);
-router.get("/batch/:batchId", verifyToken, isAdmin, getProjectsByBatch);
+router.post("/assign-to-batch", verifyToken, isAdminOrTeacher, assignProjectToBatch);
+router.post("/create", verifyToken, isAdminOrTeacher, createProject);
+router.get("/batch/:batchId", verifyToken, isAdminOrTeacher, getProjectsByBatch);
 router.get("/student/:studentId", verifyToken, getProjectsByStudent); // Allow both admin and student
 router.get("/:projectId", verifyToken, getProjectById);
-router.patch("/:projectId", verifyToken, isAdmin, updateProject);
-router.delete("/:projectId", verifyToken, isAdmin, deleteProject);
-router.patch("/:projectId/approve", verifyToken, isAdmin, approveProject);
+router.patch("/:projectId", verifyToken, isAdminOrTeacher, updateProject);
+router.delete("/:projectId", verifyToken, isAdminOrTeacher, deleteProject);
+router.patch("/:projectId/approve", verifyToken, isAdminOrTeacher, approveProject);
 
 // ===== STUDENT ROUTES =====
 router.patch("/module/:moduleId", verifyToken, isStudent, updateModuleStatus);
