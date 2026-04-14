@@ -11,7 +11,7 @@ import {
   updateMe,
   uploadStudentPhoto,
 } from "../controllers/student.controller.js";
-import { verifyToken, isAdmin } from "../middleware/auth.middleware.js";
+import { verifyToken, isAdmin, isAdminOrTeacher } from "../middleware/auth.middleware.js";
 
 const router = Router();
 
@@ -23,11 +23,11 @@ router.get("/me", verifyToken, getMe);
 router.patch("/me", verifyToken, updateMe);
 router.patch("/me/photo", verifyToken, uploadStudentPhoto);
 
-// ADMIN protected routes
+// ADMIN/TEACHER protected routes
 router.get("/list", verifyToken, getAllStudents);
-router.get("/:id", verifyToken, isAdmin, getStudentById);
-router.patch("/update/:id", verifyToken, isAdmin, updateStudent);
-router.patch("/:id/photo", verifyToken, isAdmin, uploadStudentPhoto);
-router.delete("/delete/:id", verifyToken, isAdmin, deleteStudent);
+router.get("/:id", verifyToken, isAdminOrTeacher, getStudentById);
+router.patch("/update/:id", verifyToken, isAdminOrTeacher, updateStudent);
+router.patch("/:id/photo", verifyToken, isAdminOrTeacher, uploadStudentPhoto);
+router.delete("/delete/:id", verifyToken, isAdminOrTeacher, deleteStudent);
 
 export default router;

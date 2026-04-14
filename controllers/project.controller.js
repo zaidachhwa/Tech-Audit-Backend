@@ -98,7 +98,11 @@ export const createProject = async (req, res) => {
       $push: { projects: project._id },
     });
 
-    return res.status(201).json({ message: "Project created", project });
+    const populatedProject = await Project.findById(project._id)
+      .populate("batch", "batch_name batch_no")
+      .populate("createdBy", "name email");
+
+    return res.status(201).json({ message: "Project created", project: populatedProject });
   } catch (err) {
     console.error("Create project error:", err);
     return res.status(500).json({ message: err.message });
@@ -154,7 +158,10 @@ export const updateProject = async (req, res) => {
       req.params.projectId,
       update,
       { new: true }
-    ).lean();
+    )
+      .populate("batch", "batch_name batch_no")
+      .populate("createdBy", "name email")
+      .lean();
     if (!project) return res.status(404).json({ message: "Project not found" });
     return res.status(200).json({ message: "Project updated", project });
   } catch (err) {
@@ -192,7 +199,9 @@ export const updateModuleStatus = async (req, res) => {
       { "modules._id": moduleId, assignedTo: studentId },
       { $set: { "modules.$.status": status, "modules.$.notes": notes } },
       { new: true }
-    );
+    )
+      .populate("batch", "batch_name batch_no")
+      .populate("createdBy", "name email");
 
     if (!project)
       return res.status(404).json({ message: "Project or module not found." });
@@ -213,7 +222,9 @@ export const updateProjectStatus = async (req, res) => {
       { _id: req.params.projectId, assignedTo: studentId },
       { overallStatus: status },
       { new: true }
-    );
+    )
+      .populate("batch", "batch_name batch_no")
+      .populate("createdBy", "name email");
 
     if (!project)
       return res
@@ -235,7 +246,9 @@ export const submitProject = async (req, res) => {
       { _id: req.params.projectId, assignedTo: studentId },
       { overallStatus: "Submitted" },
       { new: true }
-    );
+    )
+      .populate("batch", "batch_name batch_no")
+      .populate("createdBy", "name email");
 
     if (!project)
       return res
@@ -255,7 +268,9 @@ export const approveProject = async (req, res) => {
       req.params.projectId,
       { overallStatus: "Approved" },
       { new: true }
-    );
+    )
+      .populate("batch", "batch_name batch_no")
+      .populate("createdBy", "name email");
 
     if (!project) return res.status(404).json({ message: "Project not found" });
 

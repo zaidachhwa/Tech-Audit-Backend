@@ -11,21 +11,21 @@ import {
   getBatchNumbersByName,
 } from "../controllers/batch.controller.js";
 
-import { verifyToken, isAdmin } from "../middleware/auth.middleware.js";
+import { verifyToken, isAdmin, isAdminOrTeacher } from "../middleware/auth.middleware.js";
 
 const router = express.Router();
 
 // ================= PUBLIC =================
 router.get("/public", getPublicBatches);
 
-// ================= ADMIN =================
-router.post("/create", verifyToken, isAdmin, createBatch);
-router.get("/", verifyToken, isAdmin, getAllBatches);
+// ================= ADMIN/TEACHER =================
+router.post("/create", verifyToken, isAdminOrTeacher, createBatch);
+router.get("/", verifyToken, isAdminOrTeacher, getAllBatches);
 router.get("/:id/students", verifyToken, getBatchById);  // teachers can access this
-router.get("/:id", verifyToken, isAdmin, getBatchById);
-router.put("/:id/add-student", verifyToken, isAdmin, addStudentToBatch);
-router.put("/:id", verifyToken, isAdmin, updateBatch);
-router.delete("/:id", verifyToken, isAdmin, deleteBatch);
+router.get("/:id", verifyToken, isAdminOrTeacher, getBatchById);
+router.put("/:id/add-student", verifyToken, isAdminOrTeacher, addStudentToBatch);
+router.put("/:id", verifyToken, isAdminOrTeacher, updateBatch);
+router.delete("/:id", verifyToken, isAdminOrTeacher, deleteBatch);
 
 // ================= DROPDOWN HELPERS =================
 // 🔥 MUST BE ABOVE "/:id" routes to avoid conflicts
