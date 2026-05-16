@@ -80,7 +80,13 @@ export const addTopic = async (req, res) => {
 export const getAllSyllabi = async (req, res) => {
   try {
     const syllabi = await Syllabus.find()
-      .populate("topics")
+      .populate({
+        path: "topics",
+        populate: {
+          path: "assignedTo",
+          select: "name email phone",
+        },
+      })
       .populate("assignedTeacher", "name email phone")
       .populate("createdBy", "name email")
       .sort({ createdAt: -1 });
@@ -96,7 +102,13 @@ export const getAllSyllabi = async (req, res) => {
 export const getSyllabusById = async (req, res) => {
   try {
     const syllabus = await Syllabus.findById(req.params.syllabusId)
-      .populate("topics")
+      .populate({
+        path: "topics",
+        populate: {
+          path: "assignedTo",
+          select: "name email phone",
+        },
+      })
       .populate("assignedTeacher", "name email phone")
       .populate("createdBy", "name email");
 
@@ -317,24 +329,30 @@ export const assignTeacherToSyllabus = async (req, res) => {
       return res.status(404).json({ message: "Syllabus not found" });
     }
 
+    // Update all topics in this syllabus to be assigned to the teacher
+    await Topic.updateMany(
+      { syllabus: syllabusId },
+      { assignedTo: teacherId }
+    );
+
     // Update syllabus with assigned teacher
     const updatedSyllabus = await Syllabus.findByIdAndUpdate(
       syllabusId,
       { assignedTeacher: teacherId },
       { new: true }
     )
-      .populate("topics")
+      .populate({
+        path: "topics",
+        populate: {
+          path: "assignedTo",
+          select: "name email phone",
+        },
+      })
       .populate("assignedTeacher", "name email phone")
       .populate("createdBy", "name email");
 
-    // Also update all topics in this syllabus to be assigned to the teacher
-    await Topic.updateMany(
-      { syllabus: syllabusId },
-      { assignedTo: teacherId }
-    );
-
     res.json({
-      message: `Teacher assigned to syllabus "${syllabus.subject}" and all ${syllabus.topics.length} topics`,
+      message: `Teacher assigned to syllabus "${syllabus.subject}" and all topics updated`,
       syllabus: updatedSyllabus,
     });
   } catch (err) {
@@ -479,7 +497,13 @@ export const getSyllabusWithProgress = async (req, res) => {
     } else {
       // Return template info
       const syllabus = await Syllabus.findById(syllabusId)
-        .populate("topics")
+        .populate({
+          path: "topics",
+          populate: {
+            path: "assignedTo",
+            select: "name email phone",
+          },
+        })
         .populate("assignedTeacher", "name email phone")
         .populate("createdBy", "name email");
 
