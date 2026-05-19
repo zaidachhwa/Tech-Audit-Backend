@@ -4,7 +4,13 @@ const lectureSchema = new mongoose.Schema({
   title: { type: String, default: "" },
   description: { type: String, default: "" },
   date: { type: Date, required: true },
-  status: { type: String, enum: ["Planned", "Scheduled", "Done"], default: "Planned" }
+  status: { type: String, enum: ["Planned", "Scheduled", "Done"], default: "Planned" },
+  homework: {
+    title: { type: String, default: "" },
+    description: { type: String, default: "" },
+    due_date: { type: Date },
+    accept_submissions: { type: Boolean, default: true }
+  }
 });
 
 const scheduleSchema = new mongoose.Schema(

@@ -1,6 +1,8 @@
 import { Schedule } from "../models/schedule.model.js";
 import { Student } from "../models/student.model.js";
+import { Teacher } from "../models/teacher.model.js";
 import Batch from "../models/batch.model.js";
+import { Submission } from "../models/submission.model.js";
 
 /**
  * Create a new Lecture Schedule
@@ -202,6 +204,182 @@ export const deleteSchedule = async (req, res) => {
     await Schedule.findByIdAndDelete(req.params.id);
 
     return res.status(200).json({ message: "Schedule deleted successfully" });
+  } catch (err) {
+    return res.status(500).json({ message: err.message });
+  }
+};
+
+/**
+ * Save Homework details on a specific lecture row
+ * Role: Admin, Teacher
+ */
+export const saveHomework = async (req, res) => {
+  try {
+    const { scheduleId, lectureId } = req.params;
+    const { title, description, due_date, accept_submissions } = req.body;
+    const { id: userId, role } = req.user;
+
+    const schedule = await Schedule.findById(scheduleId);
+    if (!schedule) {
+      return res.status(404).json({ message: "Schedule not found" });
+    }
+
+    if (role === "teacher" && schedule.teacher.toString() !== userId) {
+      return res.status(403).json({ message: "Access denied. You can only assign homework to your own lectures." });
+    }
+
+    const lecture = schedule.lectures.id(lectureId);
+    if (!lecture) {
+      return res.status(404).json({ message: "Lecture not found inside this schedule" });
+    }
+
+    lecture.homework = {
+      title: title || "",
+      description: description || "",
+      due_date: due_date ? new Date(due_date) : undefined,
+      accept_submissions: typeof accept_submissions !== "undefined" ? accept_submissions : true
+    };
+
+    await schedule.save();
+
+    return res.status(200).json({
+      message: "Homework assigned successfully",
+      lecture
+    });
+  } catch (err) {
+    return res.status(500).json({ message: err.message });
+  }
+};
+
+/**
+ * Get submissions for a specific lecture row
+ * Role: Admin, Teacher, Student
+ */
+export const getLectureSubmissions = async (req, res) => {
+  try {
+    const { scheduleId, lectureId } = req.params;
+    const { id: userId, role } = req.user;
+
+    let query = {
+      schedule: scheduleId,
+      lectureId: lectureId
+    };
+
+    if (role === "student") {
+      // Students can only see their own submissions
+      query.student = userId;
+    }
+
+    const submissions = await Submission.find(query)
+      .populate("student", "name email")
+      .sort({ createdAt: -1 })
+      .lean();
+
+    return res.status(200).json(submissions);
+  } catch (err) {
+    return res.status(500).json({ message: err.message });
+  }
+};
+
+/**
+ * Submit Homework (Student only)
+ * Role: Student
+ */
+export const submitHomework = async (req, res) => {
+  try {
+    const { scheduleId, lectureId } = req.params;
+    const { fileName, fileUrl } = req.body;
+    const { id: userId, role } = req.user;
+
+    if (role !== "student") {
+      return res.status(403).json({ message: "Only students can submit homework." });
+    }
+
+    if (!fileName || !fileUrl) {
+      return res.status(400).json({ message: "File name and file content are required." });
+    }
+
+    const schedule = await Schedule.findById(scheduleId);
+    if (!schedule) {
+      return res.status(404).json({ message: "Schedule not found" });
+    }
+
+    const lecture = schedule.lectures.id(lectureId);
+    if (!lecture) {
+      return res.status(404).json({ message: "Lecture not found" });
+    }
+
+    // Verify homework is defined and accepting submissions
+    if (!lecture.homework || !lecture.homework.title) {
+      return res.status(400).json({ message: "No homework is currently assigned to this lecture." });
+    }
+
+    if (lecture.homework.accept_submissions === false) {
+      return res.status(400).json({ message: "Submissions for this assignment are closed." });
+    }
+
+    // Check if a submission already exists (resubmission support)
+    let submission = await Submission.findOne({
+      schedule: scheduleId,
+      lectureId: lectureId,
+      student: userId
+    });
+
+    if (submission) {
+      submission.fileName = fileName;
+      submission.fileUrl = fileUrl;
+      submission.status = "pending"; // Reset status on resubmission
+      await submission.save();
+    } else {
+      submission = await Submission.create({
+        schedule: scheduleId,
+        lectureId: lectureId,
+        student: userId,
+        fileName,
+        fileUrl
+      });
+    }
+
+    const populated = await Submission.findById(submission._id).populate("student", "name email");
+
+    return res.status(200).json({
+      message: "Homework submitted successfully!",
+      submission: populated
+    });
+  } catch (err) {
+    return res.status(500).json({ message: err.message });
+  }
+};
+
+/**
+ * Review a homework submission (Admin/Teacher only)
+ * Role: Admin, Teacher
+ */
+export const reviewSubmission = async (req, res) => {
+  try {
+    const { submissionId } = req.params;
+    const { id: userId, role } = req.user;
+
+    const submission = await Submission.findById(submissionId).populate("schedule");
+    if (!submission) {
+      return res.status(404).json({ message: "Submission not found" });
+    }
+
+    // Validate that Teacher is assigned to the schedule
+    if (role === "teacher" && submission.schedule.teacher.toString() !== userId) {
+      return res.status(403).json({ message: "Access denied. You can only review submissions for your own schedules." });
+    }
+
+    // Toggle status
+    submission.status = submission.status === "reviewed" ? "pending" : "reviewed";
+    await submission.save();
+
+    const populated = await Submission.findById(submission._id).populate("student", "name email");
+
+    return res.status(200).json({
+      message: `Submission marked as ${populated.status}`,
+      submission: populated
+    });
   } catch (err) {
     return res.status(500).json({ message: err.message });
   }
