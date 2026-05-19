@@ -384,3 +384,64 @@ export const reviewSubmission = async (req, res) => {
     return res.status(500).json({ message: err.message });
   }
 };
+
+/**
+ * Get all Homework Submissions for a Schedule
+ * Role: Admin, Teacher
+ */
+export const getScheduleSubmissions = async (req, res) => {
+  try {
+    const { id: scheduleId } = req.params;
+    const { id: userId, role } = req.user;
+
+    const schedule = await Schedule.findById(scheduleId);
+    if (!schedule) {
+      return res.status(404).json({ message: "Schedule not found" });
+    }
+
+    // Role-based security validation
+    if (role === "teacher" && schedule.teacher.toString() !== userId) {
+      return res.status(403).json({ message: "Access denied. You can only view submissions for your own schedules." });
+    }
+
+    const submissions = await Submission.find({ schedule: scheduleId })
+      .populate("student", "name email")
+      .lean();
+
+    return res.status(200).json(submissions);
+  } catch (err) {
+    return res.status(500).json({ message: err.message });
+  }
+};
+
+/**
+ * Delete a homework submission (Student only)
+ * Role: Student
+ */
+export const deleteSubmission = async (req, res) => {
+  try {
+    const { submissionId } = req.params;
+    const { id: userId, role } = req.user;
+
+    const submission = await Submission.findById(submissionId);
+    if (!submission) {
+      return res.status(404).json({ message: "Submission not found" });
+    }
+
+    // Only the student who submitted it can delete it
+    if (role === "student" && submission.student.toString() !== userId) {
+      return res.status(403).json({ message: "Access denied. You can only delete your own submissions." });
+    }
+
+    // Optional: Can also prevent deletion if already reviewed
+    if (submission.status === "reviewed") {
+      return res.status(400).json({ message: "Cannot delete a reviewed submission." });
+    }
+
+    await Submission.findByIdAndDelete(submissionId);
+
+    return res.status(200).json({ message: "Submission deleted successfully" });
+  } catch (err) {
+    return res.status(500).json({ message: err.message });
+  }
+};

@@ -8,7 +8,9 @@ import {
   saveHomework,
   getLectureSubmissions,
   submitHomework,
-  reviewSubmission
+  reviewSubmission,
+  getScheduleSubmissions,
+  deleteSubmission
 } from "../controllers/schedule.controller.js";
 import { verifyToken, isAdmin, isAdminOrTeacher } from "../middleware/auth.middleware.js";
 
@@ -22,6 +24,8 @@ router.post("/:scheduleId/lectures/:lectureId/homework", verifyToken, saveHomewo
 router.get("/:scheduleId/lectures/:lectureId/submissions", verifyToken, getLectureSubmissions);
 router.post("/:scheduleId/lectures/:lectureId/submissions", verifyToken, submitHomework);
 router.patch("/submissions/:submissionId/review", verifyToken, reviewSubmission);
+router.delete("/submissions/:submissionId", verifyToken, deleteSubmission);
+router.get("/:id/submissions", verifyToken, isAdminOrTeacher, getScheduleSubmissions);
 
 router.get("/:id", verifyToken, getScheduleById);
 router.put("/update/:id", verifyToken, updateSchedule);
