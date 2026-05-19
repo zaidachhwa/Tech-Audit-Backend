@@ -25,7 +25,7 @@ router.patch("/me", verifyToken, updateMe);
 router.patch("/me/photo", verifyToken, uploadStudentPhoto);
 
 // ADMIN/TEACHER protected routes
-router.post("/bulk-import", verifyToken, isAdmin, bulkImportStudents);
+router.post("/bulk-import", verifyToken, isAdminOrTeacher, bulkImportStudents);
 router.get("/list", verifyToken, getAllStudents);
 router.get("/:id", verifyToken, isAdminOrTeacher, getStudentById);
 router.patch("/update/:id", verifyToken, isAdminOrTeacher, updateStudent);
