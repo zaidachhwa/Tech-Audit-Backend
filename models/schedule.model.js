@@ -10,7 +10,16 @@ const lectureSchema = new mongoose.Schema({
     description: { type: String, default: "" },
     due_date: { type: Date },
     accept_submissions: { type: Boolean, default: true }
-  }
+  },
+  notes_shared: {
+    fileName: { type: String, default: "" },
+    fileUrl: { type: String, default: "" }
+  },
+  notes_teacher: {
+    fileName: { type: String, default: "" },
+    fileUrl: { type: String, default: "" }
+  },
+  teacher: { type: mongoose.Schema.Types.ObjectId, ref: "Teacher" }
 });
 
 const scheduleSchema = new mongoose.Schema(

@@ -31,7 +31,8 @@ export const createSchedule = async (req, res) => {
 
     const populated = await Schedule.findById(newSchedule._id)
       .populate("batch", "batch_name batch_no")
-      .populate("teacher", "name email");
+      .populate("teacher", "name email")
+      .populate("lectures.teacher", "name email");
 
     return res.status(201).json({
       message: "Lecture schedule generated successfully",
@@ -52,8 +53,11 @@ export const listSchedules = async (req, res) => {
     let query = {};
 
     if (role === "teacher") {
-      // Teachers only see their assigned schedules
-      query.teacher = userId;
+      // Teachers see schedules where they are primary teacher OR assigned to any lecture
+      query.$or = [
+        { teacher: userId },
+        { "lectures.teacher": userId }
+      ];
     } else if (role === "student") {
       // Students only see schedules matching their enrolled Batch
       const student = await Student.findById(userId).lean();
@@ -77,6 +81,7 @@ export const listSchedules = async (req, res) => {
     const schedules = await Schedule.find(query)
       .populate("batch", "batch_name batch_no")
       .populate("teacher", "name email")
+      .populate("lectures.teacher", "name email")
       .sort({ createdAt: -1 })
       .lean();
 
@@ -95,15 +100,20 @@ export const getScheduleById = async (req, res) => {
     const { id: userId, role } = req.user;
     const schedule = await Schedule.findById(req.params.id)
       .populate("batch", "batch_name batch_no")
-      .populate("teacher", "name email");
+      .populate("teacher", "name email")
+      .populate("lectures.teacher", "name email");
 
     if (!schedule) {
       return res.status(404).json({ message: "Schedule not found" });
     }
 
     // Role-based visibility validation
-    if (role === "teacher" && schedule.teacher._id.toString() !== userId) {
-      return res.status(403).json({ message: "Access denied. This schedule is assigned to another teacher." });
+    if (role === "teacher") {
+      const isPrimary = schedule.teacher._id.toString() === userId;
+      const isLectureTeacher = schedule.lectures.some(l => l.teacher && l.teacher._id.toString() === userId);
+      if (!isPrimary && !isLectureTeacher) {
+        return res.status(403).json({ message: "Access denied. This schedule is assigned to another teacher." });
+      }
     }
 
     if (role === "student") {
@@ -147,8 +157,10 @@ export const updateSchedule = async (req, res) => {
     }
 
     if (role === "teacher") {
-      // Validate that this is the assigned teacher
-      if (schedule.teacher.toString() !== userId) {
+      // Validate that this is the assigned teacher (primary or lecture-level)
+      const isPrimary = schedule.teacher.toString() === userId;
+      const isLectureTeacher = schedule.lectures.some(l => l.teacher && l.teacher.toString() === userId);
+      if (!isPrimary && !isLectureTeacher) {
         return res.status(403).json({ message: "Access denied. You can only edit your own schedules." });
       }
 
@@ -179,7 +191,8 @@ export const updateSchedule = async (req, res) => {
 
     const populated = await Schedule.findById(schedule._id)
       .populate("batch", "batch_name batch_no")
-      .populate("teacher", "name email");
+      .populate("teacher", "name email")
+      .populate("lectures.teacher", "name email");
 
     return res.status(200).json({
       message: "Schedule updated successfully",
@@ -224,13 +237,17 @@ export const saveHomework = async (req, res) => {
       return res.status(404).json({ message: "Schedule not found" });
     }
 
-    if (role === "teacher" && schedule.teacher.toString() !== userId) {
-      return res.status(403).json({ message: "Access denied. You can only assign homework to your own lectures." });
-    }
-
     const lecture = schedule.lectures.id(lectureId);
     if (!lecture) {
       return res.status(404).json({ message: "Lecture not found inside this schedule" });
+    }
+
+    if (role === "teacher") {
+      const isPrimary = schedule.teacher.toString() === userId;
+      const isLectureTeacher = lecture.teacher && lecture.teacher.toString() === userId;
+      if (!isPrimary && !isLectureTeacher) {
+        return res.status(403).json({ message: "Access denied. You can only assign homework to your own lectures." });
+      }
     }
 
     lecture.homework = {
@@ -244,6 +261,94 @@ export const saveHomework = async (req, res) => {
 
     return res.status(200).json({
       message: "Homework assigned successfully",
+      lecture
+    });
+  } catch (err) {
+    return res.status(500).json({ message: err.message });
+  }
+};
+
+/**
+ * Generic upload notes logic for unsaved schedules (or templates)
+ */
+export const uploadNotesGeneric = async (req, res) => {
+  try {
+    const files = req.files || {};
+    const response = {};
+
+    if (files.notes_shared && files.notes_shared[0]) {
+      const file = files.notes_shared[0];
+      response.notes_shared = {
+        fileName: file.originalname,
+        fileUrl: `/uploads/${file.filename}`
+      };
+    }
+    
+    if (files.notes_teacher && files.notes_teacher[0]) {
+      const file = files.notes_teacher[0];
+      response.notes_teacher = {
+        fileName: file.originalname,
+        fileUrl: `/uploads/${file.filename}`
+      };
+    }
+
+    return res.status(200).json(response);
+  } catch (err) {
+    return res.status(500).json({ message: err.message });
+  }
+};
+
+/**
+ * Upload notes to a specific lecture
+ * Roles: Admin, Teacher
+ */
+export const saveNotes = async (req, res) => {
+  try {
+    const { scheduleId, lectureId } = req.params;
+    const { id: userId, role } = req.user;
+
+    const schedule = await Schedule.findById(scheduleId);
+    if (!schedule) {
+      return res.status(404).json({ message: "Schedule not found" });
+    }
+
+    const lecture = schedule.lectures.id(lectureId);
+    if (!lecture) {
+      return res.status(404).json({ message: "Lecture not found inside this schedule" });
+    }
+
+    if (role === "teacher") {
+      const isPrimary = schedule.teacher.toString() === userId;
+      const isLectureTeacher = lecture.teacher && lecture.teacher.toString() === userId;
+      if (!isPrimary && !isLectureTeacher) {
+        return res.status(403).json({ message: "Access denied. You can only upload notes to your own lectures." });
+      }
+    }
+
+    const files = req.files || {};
+    
+    // Process notes_shared
+    if (files.notes_shared && files.notes_shared.length > 0) {
+      const file = files.notes_shared[0];
+      lecture.notes_shared = {
+        fileName: file.originalname,
+        fileUrl: `${req.protocol}://${req.get("host")}/uploads/${file.filename}`
+      };
+    }
+
+    // Process notes_teacher
+    if (files.notes_teacher && files.notes_teacher.length > 0) {
+      const file = files.notes_teacher[0];
+      lecture.notes_teacher = {
+        fileName: file.originalname,
+        fileUrl: `${req.protocol}://${req.get("host")}/uploads/${file.filename}`
+      };
+    }
+
+    await schedule.save();
+
+    return res.status(200).json({
+      message: "Notes uploaded successfully",
       lecture
     });
   } catch (err) {
@@ -400,8 +505,12 @@ export const getScheduleSubmissions = async (req, res) => {
     }
 
     // Role-based security validation
-    if (role === "teacher" && schedule.teacher.toString() !== userId) {
-      return res.status(403).json({ message: "Access denied. You can only view submissions for your own schedules." });
+    if (role === "teacher") {
+      const isPrimary = schedule.teacher.toString() === userId;
+      const isLectureTeacher = schedule.lectures.some(l => l.teacher && l.teacher.toString() === userId);
+      if (!isPrimary && !isLectureTeacher) {
+        return res.status(403).json({ message: "Access denied. You can only view submissions for your own schedules." });
+      }
     }
 
     const submissions = await Submission.find({ schedule: scheduleId })

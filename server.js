@@ -13,6 +13,7 @@ import analyticsRoutes from "./routes/analytics.routes.js";
 import assignmentRoutes from "./routes/assignment.routes.js";
 import announcementRoutes from "./routes/announcement.routes.js";
 import scheduleRoutes from "./routes/schedule.routes.js";
+import subjectTemplateRoutes from "./routes/subjectTemplate.routes.js";
 import { errorHandler } from "./middleware/error.middleware.js";
 import {
   MONGODB_URL,
@@ -25,7 +26,15 @@ import {
 
 
 const app = express();
-app.use(express.json({ limit: "5mb" }));
+import path from "path";
+import { fileURLToPath } from "url";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+app.use(express.json({ limit: "20mb" }));
+app.use(express.urlencoded({ limit: "20mb", extended: true }));
+app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 
 app.use(
   cors({
@@ -44,6 +53,8 @@ mongoose
 app.use("/api/admin", adminRoutes);
 app.use("/api/students", studentRoutes);
 app.use("/api/batches", batchRoutes);
+app.use("/api/schedules", scheduleRoutes);
+app.use("/api/subjects", subjectTemplateRoutes);
 app.use("/api/projects", projectRoutes);
 app.use("/api/reports", reportRoutes);
 app.use("/api/teachers", teacherRoutes);
@@ -51,7 +62,6 @@ app.use("/api/syllabus", syllabusRoutes);
 app.use("/api/analytics", analyticsRoutes);
 app.use("/api/assignment", assignmentRoutes);
 app.use("/api/announcement", announcementRoutes);
-app.use("/api/schedules", scheduleRoutes);
 // ERROR HANDLER
 app.use(errorHandler);
 
