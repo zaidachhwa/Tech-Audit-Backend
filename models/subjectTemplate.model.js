@@ -19,7 +19,9 @@ const subjectTemplateSchema = new mongoose.Schema(
     description: { type: String, default: "" },
     teacher: { type: mongoose.Schema.Types.ObjectId, ref: "Teacher", default: null },
     lectures: [templateLectureSchema],
-    createdBy: { type: mongoose.Schema.Types.ObjectId, ref: "Admin", required: true }
+    createdBy: { type: mongoose.Schema.Types.ObjectId, refPath: "createdByModel", required: true },
+    createdByModel: { type: String, required: true, enum: ["Admin", "Teacher"], default: "Admin" },
+    status: { type: String, enum: ["pending", "approved", "rejected"], default: "approved" }
   },
   { timestamps: true }
 );
