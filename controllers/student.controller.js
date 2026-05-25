@@ -72,6 +72,10 @@ export const loginStudent = async (req, res) => {
     const ok = await bcrypt.compare(password, student.password);
     if (!ok) return res.status(400).json({ message: "Invalid credentials" });
 
+    // Update last login timestamp
+    student.lastLogin = new Date();
+    await student.save();
+
     const token = jwt.sign({ id: student._id, role: "student" }, JWT_SECRET, {
       expiresIn: "7d",
     });

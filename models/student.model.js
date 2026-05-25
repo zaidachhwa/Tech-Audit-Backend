@@ -13,6 +13,7 @@ const studentSchema = new mongoose.Schema(
     role: { type: String, default: "student" },
     phoneNo: { type: String, default: "" },
     isActive: { type: Boolean, default: false },
+    lastLogin: { type: Date },
   },
   { timestamps: true }
 );

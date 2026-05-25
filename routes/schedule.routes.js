@@ -12,7 +12,8 @@ import {
   getScheduleSubmissions,
   deleteSubmission,
   saveNotes,
-  uploadNotesGeneric
+  uploadNotesGeneric,
+  deleteNotes
 } from "../controllers/schedule.controller.js";
 import { verifyToken, isAdmin, isAdminOrTeacher } from "../middleware/auth.middleware.js";
 import { uploadNotes } from "../middleware/upload.js";
@@ -34,6 +35,7 @@ router.post(
   ]), 
   saveNotes
 );
+router.delete("/:scheduleId/lectures/:lectureId/notes/:type", verifyToken, isAdminOrTeacher, deleteNotes);
 
 // Generic upload for unsaved schedules/templates
 router.post(

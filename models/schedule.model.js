@@ -4,6 +4,7 @@ const lectureSchema = new mongoose.Schema({
   title: { type: String, default: "" },
   description: { type: String, default: "" },
   date: { type: Date, required: true },
+  time_slot: { type: String, default: "" },
   status: { type: String, enum: ["Planned", "Scheduled", "Done"], default: "Planned" },
   homework: {
     title: { type: String, default: "" },

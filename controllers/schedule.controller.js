@@ -554,3 +554,49 @@ export const deleteSubmission = async (req, res) => {
     return res.status(500).json({ message: err.message });
   }
 };
+
+/**
+ * Delete notes from a specific lecture
+ * Roles: Admin, Teacher
+ */
+export const deleteNotes = async (req, res) => {
+  try {
+    const { scheduleId, lectureId, type } = req.params;
+    const { id: userId, role } = req.user;
+
+    const schedule = await Schedule.findById(scheduleId);
+    if (!schedule) {
+      return res.status(404).json({ message: "Schedule not found" });
+    }
+
+    const lecture = schedule.lectures.id(lectureId);
+    if (!lecture) {
+      return res.status(404).json({ message: "Lecture not found inside this schedule" });
+    }
+
+    if (role === "teacher") {
+      const isPrimary = schedule.teacher.toString() === userId;
+      const isLectureTeacher = lecture.teacher && lecture.teacher.toString() === userId;
+      if (!isPrimary && !isLectureTeacher) {
+        return res.status(403).json({ message: "Access denied. You can only delete notes from your own lectures." });
+      }
+    }
+
+    if (type === "shared") {
+      lecture.notes_shared = undefined;
+    } else if (type === "teacher") {
+      lecture.notes_teacher = undefined;
+    } else {
+      return res.status(400).json({ message: "Invalid note type" });
+    }
+
+    await schedule.save();
+
+    return res.status(200).json({
+      message: "Notes deleted successfully",
+      lecture
+    });
+  } catch (err) {
+    return res.status(500).json({ message: err.message });
+  }
+};
