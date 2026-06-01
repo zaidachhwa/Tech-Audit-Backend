@@ -10,7 +10,8 @@ const templateLectureSchema = new mongoose.Schema({
   notes_teacher: {
     fileName: { type: String, default: "" },
     fileUrl: { type: String, default: "" }
-  }
+  },
+  isSaturdayLecture: { type: Boolean, default: false }
 });
 
 const subjectTemplateSchema = new mongoose.Schema(
@@ -21,7 +22,7 @@ const subjectTemplateSchema = new mongoose.Schema(
     lectures: [templateLectureSchema],
     createdBy: { type: mongoose.Schema.Types.ObjectId, refPath: "createdByModel", required: true },
     createdByModel: { type: String, required: true, enum: ["Admin", "Teacher"], default: "Admin" },
-    status: { type: String, enum: ["pending", "approved", "rejected"], default: "approved" }
+    status: { type: String, enum: ["pending", "approved", "rejected", "pending_teacher", "rejected_by_teacher"], default: "approved" }
   },
   { timestamps: true }
 );

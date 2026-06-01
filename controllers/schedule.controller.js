@@ -3,6 +3,7 @@ import { Student } from "../models/student.model.js";
 import { Teacher } from "../models/teacher.model.js";
 import Batch from "../models/batch.model.js";
 import { Submission } from "../models/submission.model.js";
+import { Announcement } from "../models/announcement.model.js";
 
 /**
  * Create a new Lecture Schedule
@@ -26,8 +27,42 @@ export const createSchedule = async (req, res) => {
       subject,
       batch,
       teacher,
-      lectures: lectures || []
+      lectures: lectures || [],
+      // Admin-created schedules require teacher verification before going live
+      verificationStatus: req.user.role === "admin" ? "pending_teacher" : "approved",
+      createdByRole: req.user.role === "admin" ? "admin" : "teacher"
     });
+
+    // Detect Saturday lectures that need announcements
+    const newSaturdayLectures = [];
+    if (lectures && Array.isArray(lectures)) {
+      for (const lec of lectures) {
+        if (lec.isSaturdayLecture) {
+          newSaturdayLectures.push(lec);
+        }
+      }
+    }
+
+    if (newSaturdayLectures.length > 0) {
+      try {
+        const batchObj = await Batch.findById(batch);
+        for (const lec of newSaturdayLectures) {
+          const formattedDate = lec.date ? new Date(lec.date).toLocaleDateString() : "TBD";
+          const title = `Saturday Session Scheduled: ${subject}`;
+          const message = `A Saturday lecture session has been scheduled for "${subject}" on ${formattedDate}. Please verify the timing and details.`;
+          
+          await Announcement.create({
+            teacher: teacher,
+            title,
+            message,
+            batch: batchObj ? batchObj.batch_name : "All Batches",
+            priority: "important"
+          });
+        }
+      } catch (announceErr) {
+        console.error("Failed to generate automated Saturday announcement:", announceErr);
+      }
+    }
 
     const populated = await Schedule.findById(newSchedule._id)
       .populate("batch", "batch_name batch_no")
@@ -59,7 +94,7 @@ export const listSchedules = async (req, res) => {
         { "lectures.teacher": userId }
       ];
     } else if (role === "student") {
-      // Students only see schedules matching their enrolled Batch
+      // Students only see schedules matching their enrolled Batch AND that are approved
       const student = await Student.findById(userId).lean();
       if (!student) {
         return res.status(404).json({ message: "Student account not found." });
@@ -76,6 +111,7 @@ export const listSchedules = async (req, res) => {
       }
 
       query.batch = studentBatch._id;
+      query.verificationStatus = "approved"; // Students only see verified schedules
     }
 
     const schedules = await Schedule.find(query)
@@ -183,11 +219,58 @@ export const updateSchedule = async (req, res) => {
       if (teacher) schedule.teacher = teacher;
     }
 
+    // Detect Saturday lectures that need announcements before saving new lectures list
+    const newSaturdayLectures = [];
+    if (lectures && Array.isArray(lectures)) {
+      for (const lec of lectures) {
+        if (lec.isSaturdayLecture) {
+          if (!lec._id || String(lec._id).startsWith("temp-")) {
+            newSaturdayLectures.push(lec);
+          } else {
+            const oldLec = schedule.lectures.id(lec._id);
+            if (!oldLec) {
+              newSaturdayLectures.push(lec);
+            } else {
+              const oldDate = oldLec.date ? new Date(oldLec.date).toISOString().split('T')[0] : "";
+              const newDate = lec.date ? new Date(lec.date).toISOString().split('T')[0] : "";
+              if (oldDate !== newDate || !oldLec.isSaturdayLecture) {
+                newSaturdayLectures.push(lec);
+              }
+            }
+          }
+        }
+      }
+    }
+
     if (lectures) {
       schedule.lectures = lectures;
     }
 
     await schedule.save();
+
+    if (newSaturdayLectures.length > 0) {
+      try {
+        const batchObj = await Batch.findById(schedule.batch);
+        const finalSubject = schedule.subject;
+        const finalTeacher = schedule.teacher;
+        
+        for (const lec of newSaturdayLectures) {
+          const formattedDate = lec.date ? new Date(lec.date).toLocaleDateString() : "TBD";
+          const title = `Saturday Session Scheduled: ${finalSubject}`;
+          const message = `A Saturday lecture session has been scheduled for "${finalSubject}" on ${formattedDate}. Please verify the timing and details.`;
+          
+          await Announcement.create({
+            teacher: finalTeacher,
+            title,
+            message,
+            batch: batchObj ? batchObj.batch_name : "All Batches",
+            priority: "important"
+          });
+        }
+      } catch (announceErr) {
+        console.error("Failed to generate automated Saturday announcement on update:", announceErr);
+      }
+    }
 
     const populated = await Schedule.findById(schedule._id)
       .populate("batch", "batch_name batch_no")
@@ -209,9 +292,14 @@ export const updateSchedule = async (req, res) => {
  */
 export const deleteSchedule = async (req, res) => {
   try {
+    const { id: userId, role } = req.user;
     const schedule = await Schedule.findById(req.params.id);
     if (!schedule) {
       return res.status(404).json({ message: "Schedule not found" });
+    }
+
+    if (role === "teacher" && String(schedule.teacher) !== String(userId)) {
+      return res.status(403).json({ message: "Access denied. You can only delete your own schedules." });
     }
 
     await Schedule.findByIdAndDelete(req.params.id);
@@ -596,6 +684,51 @@ export const deleteNotes = async (req, res) => {
       message: "Notes deleted successfully",
       lecture
     });
+  } catch (err) {
+    return res.status(500).json({ message: err.message });
+  }
+};
+
+/**
+ * Teacher verifies or rejects an admin-created schedule
+ * Role: Teacher only
+ */
+export const verifySchedule = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { action } = req.body; // "approve" | "reject"
+    const { id: userId, role } = req.user;
+
+    if (role !== "teacher") {
+      return res.status(403).json({ message: "Only teachers can verify schedules." });
+    }
+
+    if (!["approve", "reject"].includes(action)) {
+      return res.status(400).json({ message: "Invalid action. Must be 'approve' or 'reject'." });
+    }
+
+    const schedule = await Schedule.findById(id);
+    if (!schedule) {
+      return res.status(404).json({ message: "Schedule not found." });
+    }
+
+    if (schedule.verificationStatus !== "pending_teacher") {
+      return res.status(400).json({ message: "This schedule is not awaiting your verification." });
+    }
+
+    if (String(schedule.teacher) !== String(userId)) {
+      return res.status(403).json({ message: "Access denied. This schedule is not assigned to you." });
+    }
+
+    if (action === "approve") {
+      schedule.verificationStatus = "approved";
+      await schedule.save();
+      return res.status(200).json({ message: "Schedule verified and approved successfully." });
+    } else {
+      // On rejection, delete the schedule entirely so admin can recreate
+      await Schedule.findByIdAndDelete(id);
+      return res.status(200).json({ message: "Schedule rejected and removed." });
+    }
   } catch (err) {
     return res.status(500).json({ message: err.message });
   }

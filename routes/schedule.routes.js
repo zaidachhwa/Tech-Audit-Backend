@@ -13,9 +13,10 @@ import {
   deleteSubmission,
   saveNotes,
   uploadNotesGeneric,
-  deleteNotes
+  deleteNotes,
+  verifySchedule
 } from "../controllers/schedule.controller.js";
-import { verifyToken, isAdmin, isAdminOrTeacher } from "../middleware/auth.middleware.js";
+import { verifyToken, isAdmin, isAdminOrTeacher, isTeacher } from "../middleware/auth.middleware.js";
 import { uploadNotes } from "../middleware/upload.js";
 
 const router = Router();
@@ -57,6 +58,7 @@ router.get("/:id/submissions", verifyToken, isAdminOrTeacher, getScheduleSubmiss
 
 router.get("/:id", verifyToken, getScheduleById);
 router.put("/update/:id", verifyToken, updateSchedule);
-router.delete("/delete/:id", verifyToken, isAdmin, deleteSchedule);
+router.delete("/delete/:id", verifyToken, isAdminOrTeacher, deleteSchedule);
+router.patch("/:id/verify", verifyToken, isTeacher, verifySchedule);
 
 export default router;

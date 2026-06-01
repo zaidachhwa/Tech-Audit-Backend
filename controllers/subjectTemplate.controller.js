@@ -13,8 +13,11 @@ export const getSubjectTemplates = async (req, res) => {
         $or: [
           { status: "approved" },
           { status: { $exists: false } },
-          { teacher: userId },
-          { createdBy: userId }
+          // Teacher's own pending/rejected templates (teacher→admin flow)
+          { createdBy: userId },
+          // Admin-created subjects assigned to this teacher needing verification
+          { teacher: userId, status: "pending_teacher" },
+          { teacher: userId, status: "rejected_by_teacher" }
         ]
       };
     }
@@ -66,12 +69,16 @@ export const saveSubjectTemplate = async (req, res) => {
         lectures: lectures || [],
         createdBy: userId,
         createdByModel: role === "admin" ? "Admin" : "Teacher",
-        status: role === "admin" ? "approved" : "pending"
+        // Admin creates → must verify by teacher first (pending_teacher)
+        // Teacher creates → goes to admin for approval (pending)
+        status: role === "admin" ? "pending_teacher" : "pending"
       });
     }
 
     return res.status(200).json({
-      message: role === "admin" ? "Subject template saved successfully" : "Subject creation request submitted to admin for approval",
+      message: role === "admin"
+        ? "Subject sent to teacher for verification"
+        : "Subject creation request submitted to admin for approval",
       template
     });
   } catch (err) {
@@ -138,6 +145,51 @@ export const updateSubjectTemplateStatus = async (req, res) => {
 
     return res.status(200).json({
       message: `Subject template status updated to '${status}' successfully.`,
+      template
+    });
+  } catch (err) {
+    return res.status(500).json({ message: err.message });
+  }
+};
+
+/**
+ * Teacher verifies or rejects an admin-created subject template
+ * Role: Teacher only
+ */
+export const verifySubjectTemplate = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { action } = req.body; // "approve" | "reject"
+    const { id: userId, role } = req.user;
+
+    if (role !== "teacher") {
+      return res.status(403).json({ message: "Only teachers can verify subject templates." });
+    }
+
+    if (!["approve", "reject"].includes(action)) {
+      return res.status(400).json({ message: "Invalid action. Must be 'approve' or 'reject'." });
+    }
+
+    const template = await SubjectTemplate.findById(id);
+    if (!template) {
+      return res.status(404).json({ message: "Subject template not found." });
+    }
+
+    if (template.status !== "pending_teacher") {
+      return res.status(400).json({ message: "This subject is not awaiting your verification." });
+    }
+
+    if (String(template.teacher) !== String(userId)) {
+      return res.status(403).json({ message: "Access denied. This subject is not assigned to you." });
+    }
+
+    template.status = action === "approve" ? "approved" : "rejected_by_teacher";
+    await template.save();
+
+    return res.status(200).json({
+      message: action === "approve"
+        ? "Subject verified and approved successfully."
+        : "Subject rejected.",
       template
     });
   } catch (err) {

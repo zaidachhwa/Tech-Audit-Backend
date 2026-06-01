@@ -20,6 +20,7 @@ const lectureSchema = new mongoose.Schema({
     fileName: { type: String, default: "" },
     fileUrl: { type: String, default: "" }
   },
+  isSaturdayLecture: { type: Boolean, default: false },
   teacher: { type: mongoose.Schema.Types.ObjectId, ref: "Teacher" }
 });
 
@@ -28,7 +29,17 @@ const scheduleSchema = new mongoose.Schema(
     subject: { type: String, required: true },
     batch: { type: mongoose.Schema.Types.ObjectId, ref: "Batch", required: true },
     teacher: { type: mongoose.Schema.Types.ObjectId, ref: "Teacher", required: true },
-    lectures: [lectureSchema]
+    lectures: [lectureSchema],
+    verificationStatus: {
+      type: String,
+      enum: ["pending_teacher", "approved"],
+      default: "approved"
+    },
+    createdByRole: {
+      type: String,
+      enum: ["admin", "teacher"],
+      default: "admin"
+    }
   },
   { timestamps: true }
 );
