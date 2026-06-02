@@ -2,7 +2,7 @@ import mongoose from "mongoose";
  
 const attendanceRecordSchema = new mongoose.Schema({
   student: { type: mongoose.Schema.Types.ObjectId, ref: "Student", required: true },
-  status: { type: String, enum: ["Present", "Absent", "Late"], default: "Present" },
+  status: { type: String, enum: ["Present", "Absent", "Late", "On Leave", "Holiday"], default: "Present" },
 });
  
 const attendanceSchema = new mongoose.Schema(

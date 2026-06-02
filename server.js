@@ -14,6 +14,7 @@ import assignmentRoutes from "./routes/assignment.routes.js";
 import announcementRoutes from "./routes/announcement.routes.js";
 import scheduleRoutes from "./routes/schedule.routes.js";
 import subjectTemplateRoutes from "./routes/subjectTemplate.routes.js";
+import attendanceRoutes from "./routes/attendance.routes.js";
 import { errorHandler } from "./middleware/error.middleware.js";
 import {
   MONGODB_URL,
@@ -62,6 +63,7 @@ app.use("/api/syllabus", syllabusRoutes);
 app.use("/api/analytics", analyticsRoutes);
 app.use("/api/assignment", assignmentRoutes);
 app.use("/api/announcement", announcementRoutes);
+app.use("/api/attendance", attendanceRoutes);
 // ERROR HANDLER
 app.use(errorHandler);
 

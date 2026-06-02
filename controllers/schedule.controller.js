@@ -111,7 +111,11 @@ export const listSchedules = async (req, res) => {
       }
 
       query.batch = studentBatch._id;
-      query.verificationStatus = "approved"; // Students only see verified schedules
+      // Students see schedules that are approved OR legacy ones without the field
+      query.$or = [
+        { verificationStatus: "approved" },
+        { verificationStatus: { $exists: false } }
+      ];
     }
 
     const schedules = await Schedule.find(query)
