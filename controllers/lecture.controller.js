@@ -776,3 +776,41 @@ export const getLectureTypes = async (req, res) => {
 export const getHomeworkStatuses = async (req, res) => {
   res.json(["assigned", "submitted", "pending_approval", "approved", "rejected"]);
 };
+
+export const assignTeacherToBatchLecture = async (req, res) => {
+  try {
+    const { batchLectureId, teacherId } = req.body;
+
+    if (!batchLectureId || !teacherId) {
+      return res.status(400).json({ message: "batchLectureId and teacherId required" });
+    }
+
+    const teacher = await Teacher.findById(teacherId);
+    if (!teacher) {
+      return res.status(404).json({ message: "Teacher not found" });
+    }
+
+    const batchLecture = await BatchLecture.findByIdAndUpdate(
+      batchLectureId,
+      { assignedTo: teacherId },
+      { new: true }
+    )
+      .populate("assignedTo", "name email phone")
+      .populate("templateLecture", "title")
+      .populate("batch", "batch_name batch_no");
+
+    if (!batchLecture) {
+      return res.status(404).json({ message: "Batch lecture not found" });
+    }
+
+    // Send WhatsApp notification
+    if (teacher.phone) {
+      const msg = `📘 *New Lecture Assigned*\n\nHello *${teacher.name}*,\nYou have been assigned a new lecture:\n\n*${batchLecture.title}*\nBatch: ${batchLecture.batch?.batch_name || ""}\n\nPlease check your portal for details.`;
+      await sendWhatsAppMessage(teacher.phone, msg);
+    }
+
+    res.json({ message: "Teacher assigned to lecture successfully", lecture: batchLecture });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+};
