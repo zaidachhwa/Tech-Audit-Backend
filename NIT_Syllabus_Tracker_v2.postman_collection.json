@@ -1,0 +1,1546 @@
+{
+	"info": {
+		"_postman_id": "34a38699-6022-4dc0-b5bd-85f3f5c6f184",
+		"name": "NIT Premium Complete Backend Suite",
+		"description": "Comprehensive Postman collection for the entire NIT auditing & syllabus tracker backend system, including admin approval pipelines, students, teachers, batches, scheduling, syllabus, sub-lectures, project tracking, attendance, reports, and analytics.",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"item": [
+		{
+			"name": "Authentication & Self Profile",
+			"item": [
+				{
+					"name": "Unified Login (Admin/Teacher/Student)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"email\": \"admin@nit.org\",\n    \"password\": \"password123\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/auth/login",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"auth",
+								"login"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Logout",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/auth/logout",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"auth",
+								"logout"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get Profile",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/auth/profile",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"auth",
+								"profile"
+							]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Admin Management",
+			"item": [
+				{
+					"name": "Register Admin",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"name\": \"System Admin\",\n    \"email\": \"admin@nit.org\",\n    \"password\": \"adminPassWord123\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/admin/register",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"admin",
+								"register"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Admin Login (Deprecated)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"email\": \"admin@nit.org\",\n    \"password\": \"adminPassWord123\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/admin/login",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"admin",
+								"login"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Approve Student",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "PATCH",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/admin/approve-student/:studentId",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"admin",
+								"approve-student",
+								":studentId"
+							],
+							"variable": [
+								{
+									"key": "studentId",
+									"value": "student_id_here"
+								}
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Reject Student",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "PATCH",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/admin/reject-student/:studentId",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"admin",
+								"reject-student",
+								":studentId"
+							],
+							"variable": [
+								{
+									"key": "studentId",
+									"value": "student_id_here"
+								}
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Approve Teacher",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "PATCH",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/admin/approve-teacher/:teacherId",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"admin",
+								"approve-teacher",
+								":teacherId"
+							],
+							"variable": [
+								{
+									"key": "teacherId",
+									"value": "teacher_id_here"
+								}
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Reject Teacher",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "PATCH",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/admin/reject-teacher/:teacherId",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"admin",
+								"reject-teacher",
+								":teacherId"
+							],
+							"variable": [
+								{
+									"key": "teacherId",
+									"value": "teacher_id_here"
+								}
+							]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Student Management",
+			"item": [
+				{
+					"name": "Register Student",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"name\": \"Amit Sharma\",\n    \"email\": \"amit@nit.org\",\n    \"password\": \"password123\",\n    \"batch_name\": \"FSD-JAVA\",\n    \"batch_no\": \"10\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/students/register",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"students",
+								"register"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get Profile (Me)",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/students/me",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"students",
+								"me"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Update Profile (Me)",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "PATCH",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"name\": \"Amit Sharma Updated\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/students/me",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"students",
+								"me"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get All Students",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/students/list",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"students",
+								"list"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get Student by ID",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/students/:id",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"students",
+								":id"
+							],
+							"variable": [
+								{
+									"key": "id",
+									"value": "student_id_here"
+								}
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Update Student",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "PATCH",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"name\": \"Amit Sharma Mod\",\n    \"isActive\": true\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/students/update/:id",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"students",
+								"update",
+								":id"
+							],
+							"variable": [
+								{
+									"key": "id",
+									"value": "student_id_here"
+								}
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Delete Student",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "DELETE",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/students/delete/:id",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"students",
+								"delete",
+								":id"
+							],
+							"variable": [
+								{
+									"key": "id",
+									"value": "student_id_here"
+								}
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Bulk Import Students",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "[\n    {\n        \"name\": \"Student A\",\n        \"email\": \"studenta@nit.org\",\n        \"password\": \"pass123\",\n        \"batch_name\": \"FSD-JAVA\",\n        \"batch_no\": \"10\"\n    },\n    {\n        \"name\": \"Student B\",\n        \"email\": \"studentb@nit.org\",\n        \"password\": \"pass123\",\n        \"batch_name\": \"FSD-JAVA\",\n        \"batch_no\": \"10\"\n    }\n]"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/students/bulk-import",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"students",
+								"bulk-import"
+							]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Teacher Management",
+			"item": [
+				{
+					"name": "Register Teacher",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"name\": \"Dr. Rajesh Kumar\",\n    \"email\": \"rajesh@nit.org\",\n    \"password\": \"password123\",\n    \"phone\": \"919876543210\",\n    \"subjects\": [\"Java\", \"C++\"]\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/teachers/register",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"teachers",
+								"register"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get All Teachers",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/teachers/list",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"teachers",
+								"list"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get Teacher Stats",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/teachers/stats",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"teachers",
+								"stats"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get Teacher by ID",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/teachers/:teacherId",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"teachers",
+								":teacherId"
+							],
+							"variable": [
+								{
+									"key": "teacherId",
+									"value": "teacher_id_here"
+								}
+							]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Batch Management",
+			"item": [
+				{
+					"name": "Get Public Batches (Dropdown)",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/batches/public",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"batches",
+								"public"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Create Batch",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"batch_name\": \"FSD-JAVA\",\n    \"batch_no\": \"10\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/batches/create",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"batches",
+								"create"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get All Batches",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/batches",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"batches"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get Batch Enrolled Students",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/batches/:id/students",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"batches",
+								":id",
+								"students"
+							],
+							"variable": [
+								{
+									"key": "id",
+									"value": "batch_id_here"
+								}
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Add Student to Batch",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"studentId\": \"student_id_here\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/batches/:id/add-student",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"batches",
+								":id",
+								"add-student"
+							],
+							"variable": [
+								{
+									"key": "id",
+									"value": "batch_id_here"
+								}
+							]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Subject Tracker",
+			"item": [
+				{
+					"name": "Get All Subjects",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/subjects",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"subjects"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Create Subject Template",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"subject\": \"Python Basics\",\n    \"description\": \"Comprehensive introduction to python syntax and scripting\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/subjects",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"subjects"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Assign Subject to Batch",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"syllabusId\": \"syllabus_id_here\",\n    \"batchId\": \"batch_id_here\",\n    \"dueDate\": \"2026-08-30\",\n    \"notes\": \"Ensure this syllabus is assigned before lectures start\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/syllabus/assign-to-batch",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"syllabus",
+								"assign-to-batch"
+							]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Lectures & Sub Lectures",
+			"item": [
+				{
+					"name": "Create Lecture Template",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"title\": \"HTML Forms\",\n    \"subjectId\": \"syllabus_id_here\",\n    \"lectureDuration\": 60,\n    \"lectureType\": \"normal\",\n    \"batchIds\": [\"batch_id_here\"],\n    \"order\": 2\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/lectures",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"lectures"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get Batch Lectures",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/lectures?batchId=batch_id_here&subjectId=syllabus_id_here",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"lectures"
+							],
+							"query": [
+								{
+									"key": "batchId",
+									"value": "batch_id_here"
+								},
+								{
+									"key": "subjectId",
+									"value": "syllabus_id_here"
+								}
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Add Sub Lecture",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"title\": \"Input Tags\",\n    \"duration\": 15,\n    \"order\": 1\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/lectures/:lectureId/sub-lectures",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"lectures",
+								":lectureId",
+								"sub-lectures"
+							],
+							"variable": [
+								{
+									"key": "lectureId",
+									"value": "lecture_id_here"
+								}
+							]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Homework Modules",
+			"item": [
+				{
+					"name": "Assign Homework to Batch",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"lectureId\": \"lecture_id_here\",\n    \"title\": \"Spring Rest Homework\",\n    \"description\": \"Write a REST controller mapping CRUD requests.\",\n    \"dueDate\": \"2026-07-28\",\n    \"batchIds\": [\"batch_id_here\"]\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/homework",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"homework"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Student: Submit Homework",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"submissionText\": \"My spring controller submission.\",\n    \"attachment\": \"https://tech.nexcoreinstitute.org/uploads/fsd_spring.zip\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/student/homework/:homeworkId/submit",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"student",
+								"homework",
+								":homeworkId",
+								"submit"
+							],
+							"variable": [
+								{
+									"key": "homeworkId",
+									"value": "homework_id_here"
+								}
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Teacher: Approve Submission",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "PATCH",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"remarks\": \"Good application layout!\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/homework/:submissionId/approve",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"homework",
+								":submissionId",
+								"approve"
+							],
+							"variable": [
+								{
+									"key": "submissionId",
+									"value": "submission_id_here"
+								}
+							]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Audit Reports",
+			"item": [
+				{
+					"name": "Create Audit Report",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"studentId\": \"student_id_here\",\n    \"parameters\": [\n        {\n            \"name\": \"Coding Standards\",\n            \"score\": 90,\n            \"maxScore\": 100\n        },\n        {\n            \"name\": \"Logic Implementation\",\n            \"score\": 85,\n            \"maxScore\": 100\n        }\n    ],\n    \"feedbackSchema\": \"Satisfactory work overall.\",\n    \"overallRemarks\": \"Good grasp of loops. Needs practice on functions.\",\n    \"auditDate\": \"2026-07-07\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/reports/create",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"reports",
+								"create"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get Reports for Student",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/reports/student/:studentId",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"reports",
+								"student",
+								":studentId"
+							],
+							"variable": [
+								{
+									"key": "studentId",
+									"value": "student_id_here"
+								}
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get Audit Report PDF",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/reports/:id/pdf",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"reports",
+								":id",
+								"pdf"
+							],
+							"variable": [
+								{
+									"key": "id",
+									"value": "report_id_here"
+								}
+							]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Calendar Scheduler",
+			"item": [
+				{
+					"name": "Create Schedule Row",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"subject\": \"Web Auditing\",\n    \"batch\": \"batch_id_here\",\n    \"teacher\": \"teacher_id_here\",\n    \"lectures\": [\n        {\n            \"title\": \"Session 1\",\n            \"description\": \"Audit of frontend frameworks\",\n            \"date\": \"2026-07-10\",\n            \"time_slot\": \"10:00 AM - 12:00 PM\"\n        }\n    ]\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/schedules/create",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"schedules",
+								"create"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get All Schedules",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/schedules/list",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"schedules",
+								"list"
+							]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Attendance Tracker",
+			"item": [
+				{
+					"name": "Save Bulk Attendance",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"batchId\": \"batch_id_here\",\n    \"date\": \"2026-07-07\",\n    \"records\": [\n        {\n            \"studentId\": \"student_id_1\",\n            \"status\": \"Present\"\n        },\n        {\n            \"studentId\": \"student_id_2\",\n            \"status\": \"Absent\"\n        }\n    ]\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/attendance/bulk",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"attendance",
+								"bulk"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get Attendance Summary",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/attendance/summary",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"attendance",
+								"summary"
+							]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Analytics & Statistics",
+			"item": [
+				{
+					"name": "Get System Analytics",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/analytics",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"analytics"
+							]
+						}
+					},
+					"response": []
+				}
+			]
+		}
+	],
+	"event": [
+		{
+			"listen": "prerequest",
+			"script": {
+				"type": "text/javascript",
+				"exec": [
+					""
+				]
+			}
+		},
+		{
+			"listen": "test",
+			"script": {
+				"type": "text/javascript",
+				"exec": [
+					""
+				]
+			}
+		}
+	],
+	"variable": [
+		{
+			"key": "base_url",
+			"value": "http://localhost:5006",
+			"type": "string"
+		},
+		{
+			"key": "token",
+			"value": "jwt_bearer_token_here",
+			"type": "string"
+		}
+	]
+}

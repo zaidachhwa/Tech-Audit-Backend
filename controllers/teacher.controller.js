@@ -2,7 +2,7 @@
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import { Teacher } from "../models/teacher.model.js";
-import { BatchTopic } from "../models/batchTopic.model.js";
+import { BatchLecture } from "../models/batchLecture.model.js";
 
 
 /* =====================================
@@ -294,18 +294,18 @@ export const getTeacherStats = async (req, res) => {
      * I'm creating placeholders so your controller logic stays same.
      */
 
-    const Topic = mongoose.model("Topic");
+    const BatchLecture = mongoose.model("BatchLecture");
     const Batch = mongoose.model("Batch");
     const Student = mongoose.model("Student");
 
-    const totalTopics = await Topic.countDocuments({ teacher: teacherId });
-    const completedTopics = await Topic.countDocuments({
-      teacher: teacherId,
-      status: "completed",
+    const totalTopics = await BatchLecture.countDocuments({ assignedTo: teacherId });
+    const completedTopics = await BatchLecture.countDocuments({
+      assignedTo: teacherId,
+      completionStatus: "Completed",
     });
-    const inProgressTopics = await Topic.countDocuments({
-      teacher: teacherId,
-      status: "in-progress",
+    const inProgressTopics = await BatchLecture.countDocuments({
+      assignedTo: teacherId,
+      completionStatus: "In Progress",
     });
 
     const assignedBatches = await Batch.find({ teacher: teacherId }).select(
@@ -375,8 +375,8 @@ export const getTeacherProgressForAdmin = async (req, res) => {
       return res.status(404).json({ message: "Teacher not found" });
     }
 
-    // All BatchTopics assigned to this teacher
-    const assignedTopics = await BatchTopic.find({ assignedTo: teacherId })
+    // All BatchLectures assigned to this teacher
+    const assignedTopics = await BatchLecture.find({ assignedTo: teacherId })
       .populate("syllabus", "subject")
       .populate("batch", "batch_name batch_no")
       .lean();

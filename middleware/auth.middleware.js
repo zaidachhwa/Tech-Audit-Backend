@@ -7,7 +7,7 @@ export const verifyToken = (req, res, next) => {
   if (!authHeader?.startsWith("Bearer "))
     return res.status(401).json({ message: "Unauthorized" });
 
-  const token = authHeader.split(" ")[1];
+  const token = authHeader.split(" ")[1]; 
   try {
     const payload = jwt.verify(token, process.env.JWT_SECRET);
     req.user = { id: payload.id, role: payload.role };

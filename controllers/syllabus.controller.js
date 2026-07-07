@@ -1,13 +1,9 @@
-// ============================================
-// controllers/syllabus.controller.js - UPDATED
-// ============================================
 import { Syllabus } from "../models/syllabus.model.js";
-import { Topic } from "../models/topic.model.js";
+import { Lecture } from "../models/lecture.model.js";
 import { BatchSyllabus } from "../models/batchSyllabus.model.js";
-import { BatchTopic } from "../models/batchTopic.model.js";
+import { BatchLecture } from "../models/batchLecture.model.js";
 import Batch from "../models/batch.model.js";
 import { Teacher } from "../models/teacher.model.js";
-import { sendWhatsAppMessage } from "../utils/whatsapp.js";
 import * as syllabusService from "../services/syllabus.service.js";
 
 /**
@@ -34,54 +30,20 @@ export const createSyllabus = async (req, res) => {
 };
 
 /**
- * Add topic to syllabus template
- */
-export const addTopic = async (req, res) => {
-  try {
-    const { title, description, dueDate, syllabusId } = req.body;
-    if (!syllabusId)
-      return res.status(400).json({ message: "syllabusId required" });
-
-    const topic = await Topic.create({
-      syllabus: syllabusId,
-      title,
-      description,
-      dueDate,
-    });
-
-    await Syllabus.findByIdAndUpdate(syllabusId, {
-      $push: { topics: topic._id },
-    });
-
-    // Also propagate this topic to any batches that already have this syllabus
-    const activeBatchSyllabi = await BatchSyllabus.find({ syllabus: syllabusId });
-    if (activeBatchSyllabi.length > 0) {
-      const batchTopicDocs = activeBatchSyllabi.map(bs => ({
-        batch: bs.batch,
-        syllabus: bs.syllabus,
-        templateTopic: topic._id,
-        title: topic.title,
-        description: topic.description,
-        dueDate: topic.dueDate,
-        completionStatus: "Pending"
-      }));
-      await BatchTopic.insertMany(batchTopicDocs);
-    }
-
-    res.status(201).json({ message: "Topic added to template and propagated", topic });
-  } catch (err) {
-    res.status(500).json({ message: err.message });
-  }
-};
-
-/**
  * Get all syllabus templates
  */
 export const getAllSyllabi = async (req, res) => {
   try {
     const syllabi = await Syllabus.find()
       .populate({
-        path: "topics",
+        path: "lectures",
+        populate: {
+          path: "assignedTo",
+          select: "name email phone",
+        },
+      })
+      .populate({
+        path: "topics", // compatibility
         populate: {
           path: "assignedTo",
           select: "name email phone",
@@ -97,13 +59,20 @@ export const getAllSyllabi = async (req, res) => {
 };
 
 /**
- * Get single syllabus template with topics
+ * Get single syllabus template with lectures
  */
 export const getSyllabusById = async (req, res) => {
   try {
     const syllabus = await Syllabus.findById(req.params.syllabusId)
       .populate({
-        path: "topics",
+        path: "lectures",
+        populate: {
+          path: "assignedTo",
+          select: "name email phone",
+        },
+      })
+      .populate({
+        path: "topics", // compatibility
         populate: {
           path: "assignedTo",
           select: "name email phone",
@@ -130,7 +99,7 @@ export const getSyllabusById = async (req, res) => {
 
 /**
  * Assign syllabus template to specific batch
- * Creates batch-specific copies of all topics
+ * Creates batch-specific copies of all lectures
  */
 export const assignSyllabusToBatch = async (req, res) => {
   try {
@@ -142,19 +111,16 @@ export const assignSyllabusToBatch = async (req, res) => {
       });
     }
 
-    // Verify batch exists
     const batch = await Batch.findById(batchId);
     if (!batch) {
       return res.status(404).json({ message: "Batch not found" });
     }
 
-    // Verify syllabus exists
-    const syllabus = await Syllabus.findById(syllabusId).populate("topics");
+    const syllabus = await Syllabus.findById(syllabusId).populate("lectures");
     if (!syllabus) {
       return res.status(404).json({ message: "Syllabus not found" });
     }
 
-    // Check if already assigned
     const existing = await BatchSyllabus.findOne({
       batch: batchId,
       syllabus: syllabusId,
@@ -166,7 +132,6 @@ export const assignSyllabusToBatch = async (req, res) => {
       });
     }
 
-    // Create BatchSyllabus instance
     const batchSyllabus = await BatchSyllabus.create({
       batch: batchId,
       syllabus: syllabusId,
@@ -175,29 +140,38 @@ export const assignSyllabusToBatch = async (req, res) => {
       dueDate: dueDate,
     });
 
-    // Get template topics (if any exist already)
-    const templateTopics = await Topic.find({ syllabus: syllabusId });
+    const templateLectures = await Lecture.find({ syllabus: syllabusId });
 
-    // Only create batch topic copies if topics already exist
-    let createdBatchTopics = [];
-    if (templateTopics.length > 0) {
-      const batchTopicDocs = templateTopics.map((topic) => ({
+    let createdBatchLectures = [];
+    if (templateLectures.length > 0) {
+      const batchLectureDocs = templateLectures.map((lecture) => ({
         batch: batchId,
         syllabus: syllabusId,
-        templateTopic: topic._id,
-        title: topic.title,
-        description: topic.description,
-        dueDate: topic.dueDate,
+        templateLecture: lecture._id,
+        title: lecture.title,
+        description: lecture.description,
+        chapterId: lecture.chapterId,
+        duration: lecture.duration,
+        lectureType: lecture.lectureType,
+        order: lecture.order,
         completionStatus: "Pending",
+        subLectures: lecture.subLectures.map(sl => ({
+          title: sl.title,
+          duration: sl.duration,
+          order: sl.order,
+          completionStatus: "Pending"
+        }))
       }));
-      createdBatchTopics = await BatchTopic.insertMany(batchTopicDocs);
+      createdBatchLectures = await BatchLecture.insertMany(batchLectureDocs);
     }
 
     res.status(201).json({
       message: "Syllabus assigned to batch successfully",
       batchSyllabus,
-      topicsCreated: createdBatchTopics.length,
-      topics: createdBatchTopics,
+      topicsCreated: createdBatchLectures.length, // compatibility
+      topics: createdBatchLectures, // compatibility
+      lecturesCreated: createdBatchLectures.length,
+      lectures: createdBatchLectures,
     });
   } catch (err) {
     console.error("Error assigning syllabus to batch:", err);
@@ -206,105 +180,7 @@ export const assignSyllabusToBatch = async (req, res) => {
 };
 
 /**
- * Assign teacher to a specific batch topic
- */
-export const assignTeacherToBatchTopic = async (req, res) => {
-  try {
-    const { batchTopicId, teacherId } = req.body;
-
-    if (!batchTopicId || !teacherId) {
-      return res.status(400).json({
-        message: "batchTopicId and teacherId required",
-      });
-    }
-
-    // Verify teacher exists
-    const teacher = await Teacher.findById(teacherId);
-    if (!teacher) {
-      return res.status(404).json({ message: "Teacher not found" });
-    }
-
-    // Update batch topic
-    const batchTopic = await BatchTopic.findByIdAndUpdate(
-      batchTopicId,
-      { assignedTo: teacherId },
-      { new: true }
-    )
-      .populate("assignedTo", "name email phone")
-      .populate("templateTopic", "title")
-      .populate("batch", "batch_name batch_no");
-
-    if (!batchTopic) {
-      return res.status(404).json({ message: "Batch topic not found" });
-    }
-
-    // ⭐⭐⭐ SEND WHATSAPP MESSAGE ⭐⭐⭐
-    if (teacher.phone) {
-      const msg = `📘 *New Topic Assigned*\n\nHello *${
-        teacher.name
-      }*,\nYou have been assigned a new topic:\n\n*${
-        batchTopic.title || batchTopic.templateTopic?.title
-      }*\nBatch: ${
-        batchTopic.batch?.batch_name || ""
-      }\n\nPlease check your portal for details.`;
-
-      await sendWhatsAppMessage(teacher.phone, msg);
-    } else {
-      console.log("⚠ Teacher has no phone number, WhatsApp not sent.");
-    }
-
-    res.json({
-      message: "Teacher assigned to topic successfully",
-      topic: batchTopic,
-    });
-  } catch (err) {
-    res.status(500).json({ message: err.message });
-  }
-};
-
-/**
- * Assign teacher to a template topic
- */
-export const assignTeacherToTopic = async (req, res) => {
-  try {
-    const { topicId, teacherId } = req.body;
-
-    if (!topicId || !teacherId) {
-      return res.status(400).json({
-        message: "topicId and teacherId required",
-      });
-    }
-
-    // Verify teacher exists
-    const teacher = await Teacher.findById(teacherId);
-    if (!teacher) {
-      return res.status(404).json({ message: "Teacher not found" });
-    }
-
-    // Update topic
-    const topic = await Topic.findByIdAndUpdate(
-      topicId,
-      { assignedTo: teacherId },
-      { new: true }
-    )
-      .populate("assignedTo", "name email phone")
-      .populate("syllabus", "subject");
-
-    if (!topic) {
-      return res.status(404).json({ message: "Topic not found" });
-    }
-
-    res.json({
-      message: "Teacher assigned to topic successfully",
-      topic,
-    });
-  } catch (err) {
-    res.status(500).json({ message: err.message });
-  }
-};
-
-/**
- * Assign teacher to all topics in a syllabus template
+ * Assign teacher to all lectures in a syllabus template
  */
 export const assignTeacherToSyllabus = async (req, res) => {
   try {
@@ -317,42 +193,34 @@ export const assignTeacherToSyllabus = async (req, res) => {
       });
     }
 
-    // Verify teacher exists
     const teacher = await Teacher.findById(teacherId);
     if (!teacher) {
       return res.status(404).json({ message: "Teacher not found" });
     }
 
-    // Verify syllabus exists
-    const syllabus = await Syllabus.findById(syllabusId).populate("topics");
+    const syllabus = await Syllabus.findById(syllabusId).populate("lectures");
     if (!syllabus) {
       return res.status(404).json({ message: "Syllabus not found" });
     }
 
-    // Update all topics in this syllabus to be assigned to the teacher
-    await Topic.updateMany(
+    // Update all template lectures
+    await Lecture.updateMany(
       { syllabus: syllabusId },
       { assignedTo: teacherId }
     );
 
-    // Update syllabus with assigned teacher
+    // Update syllabus assigned teacher
     const updatedSyllabus = await Syllabus.findByIdAndUpdate(
       syllabusId,
       { assignedTeacher: teacherId },
       { new: true }
     )
-      .populate({
-        path: "topics",
-        populate: {
-          path: "assignedTo",
-          select: "name email phone",
-        },
-      })
+      .populate("lectures")
       .populate("assignedTeacher", "name email phone")
       .populate("createdBy", "name email");
 
     res.json({
-      message: `Teacher assigned to syllabus "${syllabus.subject}" and all topics updated`,
+      message: `Teacher assigned to syllabus "${syllabus.subject}" and all lectures updated`,
       syllabus: updatedSyllabus,
     });
   } catch (err) {
@@ -361,7 +229,7 @@ export const assignTeacherToSyllabus = async (req, res) => {
 };
 
 /**
- * Unassign teacher from all topics in a syllabus template
+ * Unassign teacher from all lectures in a syllabus template
  */
 export const unassignTeacherFromSyllabus = async (req, res) => {
   try {
@@ -374,26 +242,22 @@ export const unassignTeacherFromSyllabus = async (req, res) => {
       });
     }
 
-    // Verify syllabus exists
     const syllabus = await Syllabus.findById(syllabusId);
     if (!syllabus) {
       return res.status(404).json({ message: "Syllabus not found" });
     }
 
-    // Update syllabus assigned teacher to null if it matches
     if (syllabus.assignedTeacher?.toString() === teacherId) {
       syllabus.assignedTeacher = null;
       await syllabus.save();
     }
 
-    // Unassign teacher from all topics in the syllabus
-    await Topic.updateMany(
+    await Lecture.updateMany(
       { syllabus: syllabusId, assignedTo: teacherId },
       { assignedTo: null }
     );
     
-    // Also unassign from Batch Topics
-    await BatchTopic.updateMany(
+    await BatchLecture.updateMany(
       { syllabus: syllabusId, assignedTo: teacherId },
       { assignedTo: null }
     );
@@ -424,259 +288,7 @@ export const getBatchSyllabi = async (req, res) => {
 };
 
 /**
- * Get batch topics for a specific batch and syllabus
- */
-export const getBatchTopics = async (req, res) => {
-  try {
-    const { batchId, syllabusId } = req.query;
-
-    if (!batchId || !syllabusId) {
-      return res.status(400).json({
-        message: "batchId and syllabusId required",
-      });
-    }
-
-    const topics = await BatchTopic.find({
-      batch: batchId,
-      syllabus: syllabusId,
-    })
-      .populate("assignedTo", "name email")
-      .populate("templateTopic", "title description")
-      .sort({ dueDate: 1 });
-
-    const counts = {
-      total: topics.length,
-      completed: topics.filter((t) => t.completionStatus === "Completed")
-        .length,
-      inProgress: topics.filter((t) => t.completionStatus === "In Progress")
-        .length,
-      pending: topics.filter((t) => t.completionStatus === "Pending").length,
-    };
-
-    res.json({ topics, counts });
-  } catch (err) {
-    res.status(500).json({ message: err.message });
-  }
-};
-
-/**
- * Get syllabus progress for a specific batch
- */
-export const getSyllabusWithProgress = async (req, res) => {
-  try {
-    const { syllabusId } = req.params;
-    const { batchId } = req.query;
-
-    if (batchId) {
-      // Return batch-specific progress
-      const batchTopics = await BatchTopic.find({
-        syllabus: syllabusId,
-        batch: batchId,
-      })
-        .populate("assignedTo", "name email")
-        .populate("templateTopic", "title")
-        .sort({ dueDate: 1 });
-
-      const counts = {
-        total: batchTopics.length,
-        completed: batchTopics.filter((t) => t.completionStatus === "Completed")
-          .length,
-        inProgress: batchTopics.filter(
-          (t) => t.completionStatus === "In Progress"
-        ).length,
-        pending: batchTopics.filter((t) => t.completionStatus === "Pending")
-          .length,
-      };
-
-      res.json({
-        batchId,
-        syllabusId,
-        counts,
-        topics: batchTopics,
-      });
-    } else {
-      // Return template info
-      const syllabus = await Syllabus.findById(syllabusId)
-        .populate({
-          path: "topics",
-          populate: {
-            path: "assignedTo",
-            select: "name email phone",
-          },
-        })
-        .populate("assignedTeacher", "name email phone")
-        .populate("createdBy", "name email");
-
-      if (!syllabus) {
-        return res.status(404).json({ message: "Syllabus not found" });
-      }
-
-      res.json({ syllabus });
-    }
-  } catch (err) {
-    res.status(500).json({ message: err.message });
-  }
-};
-
-/**
- * ============================================
- * TEACHER - TOPIC MANAGEMENT
- * ============================================
- */
-
-/**
- * Get topics assigned to logged-in teacher (batch-scoped)
- */
-export const getTeacherTopics = async (req, res) => {
-  try {
-    const teacherId = req.user.id;
-    const { batchId } = req.query;
-
-    const filter = { assignedTo: teacherId };
-    if (batchId) filter.batch = batchId;
-
-    const topics = await BatchTopic.find(filter)
-      .populate("syllabus", "subject description")
-      .populate("batch", "batch_name batch_no")
-      .populate("templateTopic", "title")
-      .sort({ dueDate: 1 });
-
-    res.json({ topics });
-  } catch (err) {
-    res.status(500).json({ message: err.message });
-  }
-};
-
-/**
- * Mark batch topic as completed
- */
-export const markTopicCompleted = async (req, res) => {
-  try {
-    const { topicId } = req.params;
-
-    const batchTopic = await BatchTopic.findById(topicId)
-      .populate("syllabus", "subject")
-      .populate("batch", "batch_name batch_no");
-
-    if (!batchTopic) {
-      return res.status(404).json({ message: "Topic not found" });
-    }
-
-    // Permission check: only block if topic is explicitly assigned to a DIFFERENT teacher
-    if (
-      req.user.role === "teacher" &&
-      batchTopic.assignedTo &&
-      String(batchTopic.assignedTo) !== String(req.user.id)
-    ) {
-      return res.status(403).json({
-        message: "Not authorized to update this topic",
-      });
-    }
-
-    batchTopic.completionStatus = "Completed";
-    batchTopic.completedAt = new Date();
-    await batchTopic.save();
-
-    res.json({
-      message: "Topic marked as completed",
-      topic: batchTopic,
-    });
-  } catch (err) {
-    res.status(500).json({ message: err.message });
-  }
-};
-
-/**
- * Update batch topic status (can set to any status)
- */
-export const updateTopicStatus = async (req, res) => {
-  try {
-    const { topicId } = req.params;
-    const { status } = req.body;
-
-    const validStatuses = ["Pending", "In Progress", "Completed"];
-    if (!validStatuses.includes(status)) {
-      return res.status(400).json({ message: "Invalid status" });
-    }
-
-    const batchTopic = await BatchTopic.findById(topicId);
-    if (!batchTopic) {
-      return res.status(404).json({ message: "Topic not found" });
-    }
-
-    // Permission check: only block if topic is explicitly assigned to a DIFFERENT teacher
-    if (
-      req.user.role === "teacher" &&
-      batchTopic.assignedTo &&
-      String(batchTopic.assignedTo) !== String(req.user.id)
-    ) {
-      return res.status(403).json({
-        message: "Not authorized to update this topic",
-      });
-    }
-
-    batchTopic.completionStatus = status;
-    if (status === "Completed") {
-      batchTopic.completedAt = new Date();
-    }
-    await batchTopic.save();
-
-    res.json({
-      message: "Topic status updated",
-      topic: batchTopic,
-    });
-  } catch (err) {
-    res.status(500).json({ message: err.message });
-  }
-};
-
-/**
- * Add remark to batch topic
- */
-export const addTopicRemark = async (req, res) => {
-  try {
-    const { topicId } = req.params;
-    const { remark } = req.body;
-
-    const batchTopic = await BatchTopic.findById(topicId)
-      .populate("syllabus", "subject")
-      .populate("batch", "batch_name batch_no");
-
-    if (!batchTopic) {
-      return res.status(404).json({ message: "Topic not found" });
-    }
-
-    // Permission check: only block if topic is explicitly assigned to a DIFFERENT teacher
-    if (
-      req.user.role === "teacher" &&
-      batchTopic.assignedTo &&
-      String(batchTopic.assignedTo) !== String(req.user.id)
-    ) {
-      return res.status(403).json({
-        message: "Not authorized to update this topic",
-      });
-    }
-
-    batchTopic.remarks = remark || "";
-    await batchTopic.save();
-
-    res.json({
-      message: "Remark saved successfully",
-      topic: batchTopic,
-    });
-  } catch (err) {
-    res.status(500).json({ message: err.message });
-  }
-};
-
-/**
- * ============================================
- * UTILITY FUNCTIONS
- * ============================================
- */
-
-/**
- * Delete batch syllabus assignment (and all its topics)
+ * Delete batch syllabus assignment (and all its lectures)
  */
 export const deleteBatchSyllabus = async (req, res) => {
   try {
@@ -687,13 +299,11 @@ export const deleteBatchSyllabus = async (req, res) => {
       return res.status(404).json({ message: "Batch syllabus not found" });
     }
 
-    // Delete all batch topics associated with this assignment
-    await BatchTopic.deleteMany({
+    await BatchLecture.deleteMany({
       batch: batchSyllabus.batch,
       syllabus: batchSyllabus.syllabus,
     });
 
-    // Delete the batch syllabus instance
     await BatchSyllabus.findByIdAndDelete(batchSyllabusId);
 
     res.json({
@@ -730,14 +340,13 @@ export const getBatchesWithSyllabi = async (req, res) => {
   }
 };
 
-// Return batches and assigned syllabi visible to an authenticated user (teacher or admin).
-// Query: none -> returns all batches with assignedSyllabi populated but only safe fields.
-// Optionally: ?batchId=... to return assignedSyllabi for a single batch.
+/**
+ * Return batches and assigned syllabi visible to teacher/admin
+ */
 export const getAssignedSyllabiForTeacher = async (req, res) => {
   try {
     const { batchId } = req.query;
 
-    // If a specific batch requested, fetch only that one
     if (batchId) {
       const batch = await Batch.findById(batchId).select(
         "batch_name batch_no students"
@@ -745,20 +354,19 @@ export const getAssignedSyllabiForTeacher = async (req, res) => {
       if (!batch) return res.status(404).json({ message: "Batch not found" });
 
       const assignedSyllabi = await BatchSyllabus.find({ batch: batchId })
-        .populate("syllabus", "subject description topics") // only required fields
+        .populate("syllabus", "subject description lectures topics")
         .populate("assignedBy", "name email")
         .sort({ createdAt: -1 });
 
       return res.json({ batch: batch.toObject(), assignedSyllabi });
     }
 
-    // Otherwise return all batches with assignedSyllabi arrays
     const batches = await Batch.find().select("batch_name batch_no students");
 
     const batchesWithSyllabi = await Promise.all(
       batches.map(async (b) => {
         const assignedSyllabi = await BatchSyllabus.find({ batch: b._id })
-          .populate("syllabus", "subject description topics")
+          .populate("syllabus", "subject description lectures topics")
           .populate("assignedBy", "name email")
           .sort({ createdAt: -1 });
 
@@ -778,7 +386,10 @@ export const getAssignedSyllabiForTeacher = async (req, res) => {
     res.status(500).json({ message: err.message });
   }
 };
-// ✅ UPDATE SYLLABUS
+
+/**
+ * Update syllabus template metadata
+ */
 export const updateSyllabus = async (req, res) => {
   try {
     const updated = await syllabusService.updateSyllabusService(
@@ -798,7 +409,9 @@ export const updateSyllabus = async (req, res) => {
   }
 };
 
-// ✅ DELETE SYLLABUS
+/**
+ * Delete syllabus template
+ */
 export const deleteSyllabus = async (req, res) => {
   try {
     const deleted = await syllabusService.deleteSyllabusService(
@@ -810,42 +423,6 @@ export const deleteSyllabus = async (req, res) => {
 
     return res.status(200).json({
       message: "Syllabus deleted successfully",
-    });
-  } catch (err) {
-    return res.status(500).json({ message: err.message });
-  }
-};
-
-// ✅ UPDATE TOPIC
-export const updateTopic = async (req, res) => {
-  try {
-    const updated = await syllabusService.updateTopicService(
-      req.params.topicId,
-      req.body
-    );
-
-    if (!updated) return res.status(404).json({ message: "Topic not found" });
-
-    return res.status(200).json({
-      message: "Topic updated successfully",
-      updated,
-    });
-  } catch (err) {
-    return res.status(500).json({ message: err.message });
-  }
-};
-
-// ✅ DELETE TOPIC
-export const deleteTopic = async (req, res) => {
-  try {
-    const deleted = await syllabusService.deleteTopicService(
-      req.params.topicId
-    );
-
-    if (!deleted) return res.status(404).json({ message: "Topic not found" });
-
-    return res.status(200).json({
-      message: "Topic deleted successfully",
     });
   } catch (err) {
     return res.status(500).json({ message: err.message });
