@@ -49,15 +49,19 @@ export const getBatchNumbersByName = async (req, res) => {
 
 export const createBatch = async (req, res) => {
   try {
-    const { batch_name, batch_no } = req.body;
-    if (!batch_name || !batch_no)
-      return res
-        .status(400)
-        .json({ message: "batch_name & batch_no required" });
+    const { batch_name, batch_no, name, course, semester } = req.body;
+    const finalBatchName = batch_name || name;
+    const finalBatchNo = batch_no || "1";
+    if (!finalBatchName) {
+      return res.status(400).json({ message: "batch_name or name required" });
+    }
 
     const batch = await batchService.createBatchService({
-      batch_name,
-      batch_no,
+      batch_name: finalBatchName,
+      batch_no: finalBatchNo,
+      name: finalBatchName,
+      course: course || "",
+      semester: semester || ""
     });
 
     return res.status(201).json({ message: "Batch created", batch });

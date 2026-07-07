@@ -13,11 +13,13 @@ export const createHomework = async (req, res) => {
   try {
     const {
       lectureId,
+      subjectId,
       title,
       description,
       comment, // alias
       dueDate,
-      batchIds = []
+      batchIds = [],
+      attachments = []
     } = req.body;
 
     if (!title || !dueDate) {
@@ -49,10 +51,11 @@ export const createHomework = async (req, res) => {
         description: description || comment || "",
         comment: description || comment || "",
         dueDate,
-        lecture: lectureId,
+        lecture: lectureId || null,
         student: studentId,
         assignedBy: req.user.id,
-        status: "Assigned"
+        status: "Assigned",
+        attachments: attachments || []
       });
     });
 
@@ -155,20 +158,26 @@ export const getMyHomework = async (req, res) => {
  */
 export const submitHomework = async (req, res) => {
   try {
-    const { homeworkId } = req.params;
-    const { submissionText, attachment } = req.body;
+    const homeworkId = req.body.homeworkId || req.params.homeworkId;
+    const { submissionText, attachment, attachments } = req.body;
     const studentId = req.user.id;
+
+    if (!homeworkId) {
+      return res.status(400).json({ message: "homeworkId is required" });
+    }
 
     const homework = await Homework.findOne({ _id: homeworkId, student: studentId });
     if (!homework) {
       return res.status(404).json({ message: "Homework not found or unauthorized" });
     }
 
+    const finalAttachments = attachments || (attachment ? [attachment] : []);
+
     // Push new submission to submissions list
     homework.submissions.push({
-      submissionText,
-      fileName: attachment ? attachment.split("/").pop() : "attachment",
-      fileUrl: attachment || "",
+      submissionText: submissionText || "",
+      fileName: finalAttachments.length > 0 ? finalAttachments[0].split("/").pop() : "attachment",
+      fileUrl: finalAttachments.length > 0 ? finalAttachments[0] : "",
       status: "Pending Approval"
     });
 
@@ -176,6 +185,35 @@ export const submitHomework = async (req, res) => {
     await homework.save();
 
     res.json({ message: "Homework submitted successfully", homework });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+};
+
+export const updateSubmission = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { submissionText, attachments, attachment } = req.body;
+
+    const homework = await Homework.findOne({ "submissions._id": id });
+    if (!homework) {
+      return res.status(404).json({ message: "Homework submission not found" });
+    }
+
+    const sub = homework.submissions.id(id);
+    if (sub) {
+      if (submissionText !== undefined) sub.submissionText = submissionText;
+      if (attachments && Array.isArray(attachments)) {
+        sub.fileUrl = attachments[0] || "";
+        sub.fileName = attachments[0] ? attachments[0].split("/").pop() : "attachment";
+      } else if (attachment) {
+        sub.fileUrl = attachment;
+        sub.fileName = attachment.split("/").pop();
+      }
+      await homework.save();
+    }
+
+    res.json({ message: "Submission updated successfully", homework });
   } catch (err) {
     res.status(500).json({ message: err.message });
   }

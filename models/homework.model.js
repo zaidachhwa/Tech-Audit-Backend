@@ -41,6 +41,7 @@ const homeworkSchema = new mongoose.Schema(
       type: String,
       default: "",
     },
+    attachments: [{ type: String }],
     status: {
       type: String,
       enum: ["Assigned", "Submitted", "Pending Approval", "Approved", "Rejected"],

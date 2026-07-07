@@ -3,6 +3,8 @@ import mongoose from "mongoose";
 const syllabusSchema = new mongoose.Schema(
   {
     subject: { type: String, required: true },
+    name: { type: String }, // alias for v2
+    code: { type: String, default: "" }, // v2 field
     description: { type: String, default: "" },
 
     lectures: [{ type: mongoose.Schema.Types.ObjectId, ref: "Lecture" }],

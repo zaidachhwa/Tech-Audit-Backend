@@ -37,6 +37,7 @@ router.get("/lectures", verifyToken, getLectures);
 router.get("/lectures/:id", verifyToken, getLectureById);
 router.post("/lectures", verifyToken, isAdminOrTeacher, createLecture);
 router.put("/lectures/:id", verifyToken, isAdminOrTeacher, updatedLectureShim);
+router.patch("/lectures/:id", verifyToken, isAdminOrTeacher, updatedLectureShim);
 router.delete("/lectures/:id", verifyToken, isAdminOrTeacher, deleteLecture);
 
 // PUT update lecture shim for compatibility with older routing namespaces
@@ -64,6 +65,7 @@ router.delete("/teacher-lecture-mapping/:id", verifyToken, isAdmin, deleteTeache
 // ===== TEACHER SPECIFIC =====
 router.get("/teacher/my-lectures", verifyToken, isTeacher, getTeacherLectures);
 router.patch("/teacher/lecture/:lectureId/complete", verifyToken, isTeacher, updateLectureStatus);
+router.patch("/lecture/:lectureId/complete", verifyToken, updateLectureStatus);
 router.get("/teacher/subject-progress", verifyToken, isTeacher, getSubjectProgress);
 
 // ===== SUBJECT PROGRESS =====
@@ -75,5 +77,7 @@ router.get("/admin/dashboard", verifyToken, getAdminDashboardStats);
 // ===== MASTER DATA =====
 router.get("/master/lecture-types", getLectureTypes);
 router.get("/master/homework-status", getHomeworkStatuses);
+router.get("/master/status", (req, res) => res.json(["active", "inactive"]));
+router.get("/master/roles", (req, res) => res.json(["admin", "teacher", "student"]));
 
 export default router;

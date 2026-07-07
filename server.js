@@ -17,6 +17,16 @@ import scheduleRoutes from "./routes/schedule.routes.js";
 import subjectRoutes from "./routes/subject.routes.js";
 import attendanceRoutes from "./routes/attendance.routes.js";
 import authRoutes from "./routes/auth.routes.js";
+import dashboardRoutes from "./routes/dashboard.routes.js";
+import chapterRoutes from "./routes/chapter.routes.js";
+import studentBatchRoutes from "./routes/studentBatch.routes.js";
+import referenceRoutes from "./routes/reference.routes.js";
+import teacherMappingRoutes from "./routes/teacherMapping.routes.js";
+import reportV2Routes from "./routes/reportV2.routes.js";
+import notificationRoutes from "./routes/notification.routes.js";
+import settingsRoutes from "./routes/settings.routes.js";
+import activityLogRoutes from "./routes/activityLog.routes.js";
+import uploadRoutes from "./routes/upload.routes.js";
 import { errorHandler } from "./middleware/error.middleware.js";
 import {
   MONGODB_URL,
@@ -58,12 +68,22 @@ app.use("/api/students", studentRoutes);
 app.use("/api/batches", batchRoutes);
 app.use("/api/schedules", scheduleRoutes);
 app.use("/api/auth", authRoutes);
+app.use("/api/dashboard", dashboardRoutes);
+app.use("/api/chapters", chapterRoutes);
+app.use("/api/student-batch", studentBatchRoutes);
+app.use("/api/reference", referenceRoutes);
+app.use("/api/teacher-mapping", teacherMappingRoutes);
 app.use("/api/subjects", subjectRoutes);
 app.use("/api/projects", projectRoutes);
+app.use("/api/reports", reportV2Routes); // V2 reports registered before reportRoutes
 app.use("/api/reports", reportRoutes);
 app.use("/api/teachers", teacherRoutes);
 app.use("/api/syllabus", syllabusRoutes);
 app.use("/api/analytics", analyticsRoutes);
+app.use("/api/notifications", notificationRoutes);
+app.use("/api/settings", settingsRoutes);
+app.use("/api/activity-log", activityLogRoutes);
+app.use("/api/upload", uploadRoutes);
 app.use("/api", homeworkRoutes);
 app.use("/api/assignment", homeworkRoutes); // compatibility
 app.use("/api", lectureRoutes);

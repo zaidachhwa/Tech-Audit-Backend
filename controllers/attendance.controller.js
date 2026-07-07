@@ -8,23 +8,45 @@ import { Attendance } from "../models/attendance.model.js";
 export const markAttendance = async (req, res) => {
   try {
     const teacherId = req.user.id;
-    const { batchId, date, records } = req.body;
+    const { batchId, date, records, lectureId, attendance } = req.body;
 
-    if (!batchId || !date || !records || !Array.isArray(records)) {
-      return res.status(400).json({ message: "batchId, date and records are required" });
+    const finalBatchId = batchId;
+    if (!finalBatchId) {
+      return res.status(400).json({ message: "batchId is required" });
     }
 
-    const normalizedDate = new Date(date);
-    normalizedDate.setHours(0, 0, 0, 0);
+    const finalDate = date ? new Date(date) : new Date();
+    finalDate.setHours(0, 0, 0, 0);
+
+    let finalRecords = [];
+    if (records && Array.isArray(records)) {
+      finalRecords = records;
+    } else if (attendance && Array.isArray(attendance)) {
+      finalRecords = attendance.map((rec) => ({
+        student: rec.studentId,
+        status: rec.status.charAt(0).toUpperCase() + rec.status.slice(1).toLowerCase()
+      }));
+    }
+
+    const updateFields = {
+      batch: finalBatchId,
+      date: finalDate,
+      teacher: teacherId,
+      records: finalRecords
+    };
+
+    if (lectureId) {
+      updateFields.lecture = lectureId;
+    }
 
     // Upsert — update if exists for this batch+date+teacher, create otherwise
-    const attendance = await Attendance.findOneAndUpdate(
-      { batch: batchId, date: normalizedDate, teacher: teacherId },
-      { batch: batchId, date: normalizedDate, teacher: teacherId, records },
+    const attendanceDoc = await Attendance.findOneAndUpdate(
+      { batch: finalBatchId, date: finalDate, teacher: teacherId },
+      updateFields,
       { upsert: true, new: true }
     );
 
-    res.json({ message: "Attendance saved successfully", attendance });
+    res.json({ message: "Attendance saved successfully", attendance: attendanceDoc });
   } catch (err) {
     res.status(500).json({ message: err.message });
   }

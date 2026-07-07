@@ -29,6 +29,8 @@ const batchLectureSchema = new mongoose.Schema(
     order: { type: Number, default: 0 },
     
     assignedTo: { type: mongoose.Schema.Types.ObjectId, ref: "Teacher" },
+    teacherIds: [{ type: mongoose.Schema.Types.ObjectId, ref: "Teacher" }],
+    status: { type: String, default: "active" },
     completionStatus: {
       type: String,
       enum: ["Pending", "In Progress", "Completed"],

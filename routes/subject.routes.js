@@ -27,6 +27,19 @@ router.get("/", verifyToken, async (req, res, next) => {
   return getAllSyllabi(req, res, next);
 });
 
+// GET single subject details
+router.get("/:id", verifyToken, async (req, res) => {
+  const { id } = req.params;
+  let subject = await Syllabus.findById(id).populate("lectures");
+  if (!subject) {
+    subject = await SubjectTemplate.findById(id);
+  }
+  if (!subject) {
+    return res.status(404).json({ message: "Subject not found" });
+  }
+  res.json(subject);
+});
+
 // POST create subject (detects structure of body to route to Syllabus or SubjectTemplate)
 router.post("/", verifyToken, async (req, res, next) => {
   if (req.body.name && Array.isArray(req.body.lectures)) {
@@ -37,8 +50,9 @@ router.post("/", verifyToken, async (req, res, next) => {
   return createSyllabus(req, res, next);
 });
 
-// PUT update subject (Syllabus Tracker only)
+// PUT / PATCH update subject
 router.put("/:id", verifyToken, updateSyllabus);
+router.patch("/:id", verifyToken, updateSyllabus);
 
 // DELETE subject (checks database to delete from Syllabus or SubjectTemplate)
 router.delete("/:id", verifyToken, async (req, res, next) => {

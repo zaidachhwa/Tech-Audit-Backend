@@ -3,11 +3,11 @@ import { Student } from "../models/student.model.js";
 
 
 // ✅ CREATE BATCH (WITH DUPLICATE CHECK)
-export const createBatchService = async ({ batch_name, batch_no }) => {
+export const createBatchService = async ({ batch_name, batch_no, name, course, semester }) => {
   const existing = await Batch.findOne({ batch_name, batch_no });
   if (existing) throw new Error("Batch already exists");
 
-  const batch = new Batch({ batch_name, batch_no });
+  const batch = new Batch({ batch_name, batch_no, name, course, semester });
   await batch.save();
   return batch;
 };

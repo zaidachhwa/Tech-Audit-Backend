@@ -17,10 +17,16 @@ import * as syllabusService from "../services/syllabus.service.js";
  */
 export const createSyllabus = async (req, res) => {
   try {
-    const { subject, description } = req.body;
+    const { subject, name, code, description } = req.body;
+    const finalSubject = subject || name;
+    if (!finalSubject) {
+      return res.status(400).json({ message: "subject or name is required" });
+    }
     const syllabus = await Syllabus.create({
-      subject,
-      description,
+      subject: finalSubject,
+      name: finalSubject,
+      code: code || "",
+      description: description || "",
       createdBy: req.user.id,
     });
     res.status(201).json({ message: "Syllabus template created", syllabus });
