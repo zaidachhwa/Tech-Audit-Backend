@@ -39,7 +39,7 @@ app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 
 app.use(
   cors({
-    origin: [DEPLOYED_CORS_ORIGIN, CORS_ORIGIN],
+    origin: [DEPLOYED_CORS_ORIGIN, CORS_ORIGIN, "http://localhost:5173"],
     credentials: true,
   })
 );
