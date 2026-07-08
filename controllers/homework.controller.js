@@ -28,24 +28,48 @@ export const createHomework = async (req, res) => {
 
     // Get all students enrolled in specified batches
     let targetStudents = [];
+    let batchMap = {}; // studentId -> batchDoc
     if (batchIds && batchIds.length > 0) {
       const batches = await Batch.find({ _id: { $in: batchIds } });
       for (const batch of batches) {
+        // Primary: use batch.students array
         if (batch.students && batch.students.length > 0) {
-          targetStudents = [...targetStudents, ...batch.students];
+          for (const sid of batch.students) {
+            targetStudents.push(sid);
+            batchMap[sid.toString()] = batch;
+          }
+        } else {
+          // Fallback: find students by batch_name + batch_no in Student collection
+          const studentsInBatch = await Student.find({
+            batch_name: batch.batch_name,
+            batch_no: batch.batch_no,
+          }).select("_id").lean();
+          for (const s of studentsInBatch) {
+            targetStudents.push(s._id);
+            batchMap[s._id.toString()] = batch;
+            // Also update batch.students for future lookups
+            if (!batch.students.includes(s._id)) {
+              batch.students.push(s._id);
+            }
+          }
+          if (studentsInBatch.length > 0) {
+            await batch.save();
+          }
         }
       }
     }
 
-    // If no students found in batches, check student model as fallback
+    // If no students found anywhere, return error
     if (targetStudents.length === 0) {
       return res.status(404).json({ message: "No students found in the specified batches" });
     }
+
 
     // Deduplicate student IDs
     const studentIds = [...new Set(targetStudents.map(id => id.toString()))];
 
     const homeworkPromises = studentIds.map((studentId) => {
+      const batchDoc = batchMap[studentId];
       return Homework.create({
         title,
         description: description || comment || "",
@@ -53,6 +77,9 @@ export const createHomework = async (req, res) => {
         dueDate,
         lecture: lectureId || null,
         student: studentId,
+        batch: batchDoc?._id || null,
+        batchName: batchDoc?.batch_name || "",
+        batchNumber: batchDoc?.batch_no || "",
         assignedBy: req.user.id,
         status: "Assigned",
         attachments: attachments || []
@@ -66,6 +93,7 @@ export const createHomework = async (req, res) => {
     res.status(500).json({ message: err.message });
   }
 };
+
 
 /**
  * Get Homework List (Postman: GET /api/homework)
@@ -137,14 +165,43 @@ export const deleteHomework = async (req, res) => {
 };
 
 /**
- * Get Assigned Homework (Postman: GET /api/student/homework)
+ * Get Assigned Homework (GET /api/student-homework)
+ * Finds all students in the same batch (by batch_name + batch_no from Student collection)
+ * and returns all homework assigned to any of them — matching exactly what Dashboard shows.
  */
 export const getMyHomework = async (req, res) => {
   try {
     const studentId = req.user.id;
-    const homeworkList = await Homework.find({ student: studentId })
+
+    // 1. Get this student's batch_name + batch_no
+    const student = await Student.findById(studentId).lean();
+    if (!student) {
+      return res.status(404).json({ message: "Student not found" });
+    }
+
+    // 2. Find ALL students with same batch_name + batch_no from Student collection
+    //    (more reliable than Batch.students array which may be out of sync)
+    const batchMates = await Student.find({
+      batch_name: student.batch_name,
+      batch_no: student.batch_no,
+    }).select("_id").lean();
+
+    const batchStudentIds = batchMates.map((s) => s._id);
+    // Ensure current student is always included
+    if (!batchStudentIds.some((id) => id.toString() === studentId.toString())) {
+      batchStudentIds.push(studentId);
+    }
+
+    // 3. Find homework for ANY student in this batch (same as dashboard)
+    const homeworkList = await Homework.find({
+      student: { $in: batchStudentIds },
+    })
       .populate("assignedBy", "name email")
-      .populate("lecture", "title")
+      .populate({
+        path: "lecture",
+        select: "title",
+        populate: { path: "syllabus", select: "subject" },
+      })
       .sort({ createdAt: -1 });
 
     res.json(homeworkList);
@@ -152,6 +209,8 @@ export const getMyHomework = async (req, res) => {
     res.status(500).json({ message: err.message });
   }
 };
+
+
 
 /**
  * Submit Homework (Postman: POST /api/student/homework/:homeworkId/submit)

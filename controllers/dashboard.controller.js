@@ -105,48 +105,84 @@ export const getStudentDashboard = async (req, res) => {
   try {
     const studentId = req.user.id;
 
-    // Find student batch
-    const studentBatch = await Batch.findOne({ students: studentId });
-    if (!studentBatch) {
-      return res.status(404).json({ message: "No batch assigned to this student." });
+    // Find the student to get batch_name & batch_no
+    const { Student } = await import("../models/student.model.js");
+    const studentDoc = await Student.findById(studentId).lean();
+
+    // Find student's batch by studentId in students array OR by batch_name+batch_no
+    let studentBatch = await Batch.findOne({ students: studentId });
+    if (!studentBatch && studentDoc?.batch_name) {
+      studentBatch = await Batch.findOne({
+        batch_name: studentDoc.batch_name,
+        batch_no: studentDoc.batch_no,
+      });
+      // Auto-link student to batch for future queries
+      if (studentBatch && !studentBatch.students.includes(studentId)) {
+        studentBatch.students.push(studentId);
+        await studentBatch.save();
+      }
     }
 
-    const batchId = studentBatch._id;
+    const batchId = studentBatch?._id;
+
+    // All batch-mates for homework fallback
+    let batchStudentIds = [studentId.toString()];
+    if (studentBatch?.students?.length > 0) {
+      batchStudentIds = studentBatch.students.map((id) => id.toString());
+      if (!batchStudentIds.includes(studentId.toString())) {
+        batchStudentIds.push(studentId.toString());
+      }
+    }
 
     // Today's lectures for batch
-    const todayLectures = await BatchLecture.find({ batch: batchId })
-      .populate("assignedTo", "name")
-      .populate("syllabus", "subject")
-      .lean();
+    const todayLectures = batchId
+      ? await BatchLecture.find({ batch: batchId })
+          .populate("assignedTo", "name")
+          .populate({ path: "syllabus", select: "subject" })
+          .lean()
+      : [];
 
-    // Homework for student
-    const homework = await Homework.find({ student: studentId })
+    // Homework — direct by studentId OR via batch (same logic as getMyHomework)
+    const homeworkQuery = {
+      $or: [
+        { student: studentId },
+        { student: { $in: batchStudentIds }, batchName: studentDoc?.batch_name },
+      ],
+    };
+    if (batchId) {
+      homeworkQuery.$or.push({ student: { $in: batchStudentIds }, batch: batchId });
+    }
+    const homework = await Homework.find(homeworkQuery)
       .populate("assignedBy", "name")
-      .populate("lecture", "title")
+      .populate({ path: "lecture", select: "title", populate: { path: "syllabus", select: "subject" } })
+      .sort({ createdAt: -1 })
       .lean();
 
     // Overall progress percent of the batch
-    const batchLectures = await BatchLecture.find({ batch: batchId, lectureType: "Normal" });
-    const totalLectures = batchLectures.length;
-    const completedLectures = batchLectures.filter((l) => l.completionStatus === "Completed").length;
-    const progress = totalLectures > 0 ? Math.round((completedLectures / totalLectures) * 100) : 0;
+    let progress = 0;
+    if (batchId) {
+      const batchLectures = await BatchLecture.find({ batch: batchId, lectureType: "Normal" });
+      const totalLectures = batchLectures.length;
+      const completedLectures = batchLectures.filter((l) => l.completionStatus === "Completed").length;
+      progress = totalLectures > 0 ? Math.round((completedLectures / totalLectures) * 100) : 0;
+    }
 
     // Attendance stats
-    const attendanceRecords = await Attendance.find({
-      batch: batchId,
-      "records.student": studentId
-    });
-
     let presentCount = 0;
     let absentCount = 0;
-
-    attendanceRecords.forEach((record) => {
-      const studentRec = record.records.find((r) => String(r.student) === String(studentId));
-      if (studentRec) {
-        if (studentRec.status === "Present" || studentRec.status === "present") presentCount++;
-        else if (studentRec.status === "Absent" || studentRec.status === "absent") absentCount++;
-      }
-    });
+    if (batchId) {
+      const attendanceRecords = await Attendance.find({
+        batch: batchId,
+        "records.student": studentId,
+      });
+      attendanceRecords.forEach((record) => {
+        const studentRec = record.records.find((r) => String(r.student) === String(studentId));
+        if (studentRec) {
+          if (studentRec.status === "Present" || studentRec.status === "present") presentCount++;
+          else if (studentRec.status === "Absent" || studentRec.status === "absent") absentCount++;
+        }
+      });
+    }
 
     const totalAttendance = presentCount + absentCount;
     const attendancePercentage = totalAttendance > 0 ? Math.round((presentCount / totalAttendance) * 100) : 0;
@@ -158,8 +194,8 @@ export const getStudentDashboard = async (req, res) => {
       attendance: {
         present: presentCount,
         absent: absentCount,
-        percentage: attendancePercentage
-      }
+        percentage: attendancePercentage,
+      },
     });
   } catch (err) {
     res.status(500).json({ message: err.message });
