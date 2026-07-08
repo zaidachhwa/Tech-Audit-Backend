@@ -125,7 +125,7 @@ export const rejectTeacher = async (req, res) => {
 ===================================== */
 export const getAllTeachers = async (req, res) => {
   try {
-    const teachers = await Teacher.find().select("-password");
+    const teachers = await Teacher.find().select("-password").sort({ createdAt: -1 });
     res.json({ teachers });
   } catch (err) {
     res.status(500).json({ message: err.message });
