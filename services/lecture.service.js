@@ -43,6 +43,7 @@ export const updateLectureService = async (id, data) => {
         duration: updatedLecture.duration,
         lectureType: updatedLecture.lectureType,
         order: updatedLecture.order,
+        referenceTo: updatedLecture.referenceTo || null,
       }
     );
   }

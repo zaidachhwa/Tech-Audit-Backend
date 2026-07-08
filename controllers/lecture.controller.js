@@ -42,6 +42,7 @@ export const getLectures = async (req, res) => {
       lectures = await BatchLecture.find(filter)
         .populate("assignedTo", "name email phone")
         .populate("templateLecture", "title description")
+        .populate("referenceTo", "title duration lectureType")
         .sort({ order: 1, createdAt: 1 })
         .lean();
     } else {
@@ -49,6 +50,7 @@ export const getLectures = async (req, res) => {
       lectures = await Lecture.find(filter)
         .populate("assignedTo", "name email phone")
         .populate("syllabus", "subject")
+        .populate("referenceTo", "title duration lectureType")
         .sort({ order: 1, createdAt: 1 })
         .lean();
     }
@@ -68,13 +70,15 @@ export const getLectureById = async (req, res) => {
 
     let lecture = await Lecture.findById(id)
       .populate("assignedTo", "name email phone")
-      .populate("syllabus", "subject");
+      .populate("syllabus", "subject")
+      .populate("referenceTo", "title duration lectureType");
 
     if (!lecture) {
       // Try finding batch lecture instance
       lecture = await BatchLecture.findById(id)
         .populate("assignedTo", "name email phone")
-        .populate("batch", "batch_name batch_no");
+        .populate("batch", "batch_name batch_no")
+        .populate("referenceTo", "title duration lectureType");
     }
 
     if (!lecture) {
@@ -104,6 +108,7 @@ export const createLecture = async (req, res) => {
       lectureType = "Normal",
       batchIds = [],
       order = 0,
+      referenceTo = null,
       subLectures = []
     } = req.body;
 
@@ -127,6 +132,7 @@ export const createLecture = async (req, res) => {
       lectureType: finalType,
       batchIds,
       order: Number(order) || 0,
+      referenceTo: referenceTo || null,
       subLectures: subLectures.map((sub, index) => ({
         title: sub.title,
         duration: Number(sub.duration) || 0,
@@ -161,6 +167,7 @@ export const createLecture = async (req, res) => {
         lectureType: lecture.lectureType,
         order: lecture.order,
         completionStatus: "Pending",
+        referenceTo: lecture.referenceTo || null,
         subLectures: lecture.subLectures.map(sl => ({
           title: sl.title,
           duration: sl.duration,

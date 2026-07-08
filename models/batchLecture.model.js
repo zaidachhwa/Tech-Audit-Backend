@@ -51,6 +51,11 @@ const batchLectureSchema = new mongoose.Schema(
         }
       }
     ],
+    referenceTo: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Lecture",
+      default: null
+    },
 
     studentsProgress: [
       {

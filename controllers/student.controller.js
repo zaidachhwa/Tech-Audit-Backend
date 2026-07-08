@@ -2,15 +2,39 @@ import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import { Student } from "../models/student.model.js";
 import Batch from "../models/batch.model.js";
+import { BatchLecture } from "../models/batchLecture.model.js";
+import { BatchSyllabus } from "../models/batchSyllabus.model.js";
+import { Syllabus } from "../models/syllabus.model.js";
+import Homework from "../models/homework.model.js";
+import { Attendance } from "../models/attendance.model.js";
+import { ActivityLog } from "../models/activityLog.model.js";
 
 const JWT_SECRET = process.env.JWT_SECRET;
 
 /* Register student */
 export const registerStudent = async (req, res) => {
   try {
-    const { name, email, password, batch_name, batch_no } = req.body;
+    const {
+      name,
+      email,
+      password,
+      batch_name,
+      batch_no,
+      phoneNo,
+      enrollmentNo,
+      rollNo,
+      course,
+      semester,
+      department,
+      dob,
+      gender,
+      profilePhoto,
+      idCardPhoto,
+      aadhaarPhoto
+    } = req.body;
+
     if (!name || !email || !password || !batch_name || !batch_no) {
-      return res.status(400).json({ message: "All fields required" });
+      return res.status(400).json({ message: "Name, email, password, and batch name/number are required" });
     }
 
     const exists = await Student.findOne({ email });
@@ -25,6 +49,17 @@ export const registerStudent = async (req, res) => {
       password: hashed,
       batch_name,
       batch_no,
+      phoneNo: phoneNo || "",
+      enrollmentNo: enrollmentNo || "",
+      rollNo: rollNo || "",
+      course: course || "",
+      semester: semester || "",
+      department: department || "",
+      dob: dob || "",
+      gender: gender || "",
+      profilePhoto: profilePhoto || "",
+      idCardPhoto: idCardPhoto || "",
+      aadhaarPhoto: aadhaarPhoto || "",
     });
 
     // attach to batch
@@ -107,7 +142,171 @@ export const getStudentById = async (req, res) => {
       return res.status(404).json({ message: "Student not found" });
     }
 
-    return res.status(200).json({ student });
+    // 1. Find student's batch
+    const batch = await Batch.findOne({ students: id }).lean();
+
+    // 2. Find subjects & progress
+    const subjectsProgress = [];
+    const teachersMap = new Map();
+
+    if (batch) {
+      const batchSyllabi = await BatchSyllabus.find({ batch: batch._id })
+        .populate("syllabus")
+        .lean();
+
+      for (const bs of batchSyllabi) {
+        const syllabus = bs.syllabus;
+        if (!syllabus) continue;
+
+        const batchLectures = await BatchLecture.find({
+          batch: batch._id,
+          syllabus: syllabus._id,
+          lectureType: "Normal"
+        });
+
+        const total = batchLectures.length;
+        const completed = batchLectures.filter(l => l.completionStatus === "Completed").length;
+        const progress = total > 0 ? Math.round((completed / total) * 100) : 0;
+
+        // Collect teachers who teach this batch/syllabus
+        const mappedLectures = await BatchLecture.find({
+          batch: batch._id,
+          syllabus: syllabus._id
+        }).populate("assignedTo", "name email");
+
+        mappedLectures.forEach(ml => {
+          if (ml.assignedTo) {
+            teachersMap.set(String(ml.assignedTo._id), ml.assignedTo.name);
+          }
+        });
+
+        subjectsProgress.push({
+          subjectId: syllabus._id,
+          subjectName: syllabus.subject || syllabus.name,
+          progress
+        });
+      }
+    }
+
+    // 3. Academic Info
+    const academicInfo = {
+      assignedSubjects: subjectsProgress.map(s => s.subjectName),
+      assignedTeachers: Array.from(teachersMap.values()),
+      batchDetails: batch ? `${batch.batch_name} (No. ${batch.batch_no})` : "N/A",
+      currentSemester: student.semester || "N/A",
+      courseInformation: student.course || "N/A",
+      subjectProgress: subjectsProgress
+    };
+
+    // 4. Attendance Summary
+    let presentCount = 0;
+    let absentCount = 0;
+    if (batch) {
+      const attendanceRecords = await Attendance.find({
+        batch: batch._id,
+        "records.student": id
+      });
+      attendanceRecords.forEach((record) => {
+        const studentRec = record.records.find((r) => String(r.student) === String(id));
+        if (studentRec) {
+          if (studentRec.status === "Present" || studentRec.status === "present") presentCount++;
+          else if (studentRec.status === "Absent" || studentRec.status === "absent") absentCount++;
+        }
+      });
+    }
+    const totalClasses = presentCount + absentCount;
+    const attendancePercentage = totalClasses > 0 ? Math.round((presentCount / totalClasses) * 100) : 0;
+
+    const attendanceSummary = {
+      totalClasses,
+      present: presentCount,
+      absent: absentCount,
+      percentage: attendancePercentage
+    };
+
+    // 5. Homework Summary
+    const homeworkHistory = await Homework.find({ student: id })
+      .populate("lecture", "title")
+      .populate("assignedBy", "name")
+      .sort({ createdAt: -1 })
+      .lean();
+
+    const totalHomework = homeworkHistory.length;
+    const submitted = homeworkHistory.filter(h => h.status !== "Assigned").length;
+    const approved = homeworkHistory.filter(h => h.status === "Approved" || h.status === "Completed").length;
+    const pending = homeworkHistory.filter(h => h.status === "Pending Approval" || h.status === "Submitted").length;
+    const rejected = homeworkHistory.filter(h => h.status === "Rejected").length;
+
+    const homeworkSummary = {
+      totalHomework,
+      submitted,
+      pending,
+      approved,
+      rejected,
+      history: homeworkHistory
+    };
+
+    // 6. Lecture Progress
+    let totalLectures = 0;
+    let completedLectures = 0;
+    let referenceCompleted = 0;
+
+    if (batch) {
+      const allBatchLectures = await BatchLecture.find({ batch: batch._id });
+      const normalLectures = allBatchLectures.filter(l => (l.lectureType || "Normal") === "Normal");
+      const refLectures = allBatchLectures.filter(l => (l.lectureType || "Normal") === "Reference");
+
+      totalLectures = normalLectures.length;
+      completedLectures = normalLectures.filter(l => l.completionStatus === "Completed").length;
+      referenceCompleted = refLectures.filter(l => l.completionStatus === "Completed").length;
+    }
+
+    const lectureProgress = {
+      totalLectures,
+      completedLectures,
+      remainingLectures: totalLectures - completedLectures,
+      referenceLecturesCompleted: referenceCompleted
+    };
+
+    // 7. Activity Timeline
+    const activityTimeline = [];
+    const logs = await ActivityLog.find({ user: id }).sort({ createdAt: -1 }).limit(10).lean();
+    logs.forEach(log => {
+      activityTimeline.push({
+        type: "log",
+        title: log.action,
+        description: log.details || "",
+        timestamp: log.createdAt
+      });
+    });
+
+    homeworkHistory.slice(0, 5).forEach(hw => {
+      activityTimeline.push({
+        type: "homework",
+        title: `Homework: ${hw.status}`,
+        description: `Lecture: ${hw.lecture?.title || "N/A"} - Checked by: ${hw.assignedBy?.name || "Teacher"}`,
+        timestamp: hw.updatedAt
+      });
+    });
+
+    activityTimeline.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+
+    // 8. Documents
+    const documents = [
+      { name: "Profile Photo", url: student.profilePhoto || "", type: "image" },
+      { name: "Student ID Card", url: student.idCardPhoto || "", type: "document" },
+      { name: "Aadhaar / Identity Document", url: student.aadhaarPhoto || "", type: "document" }
+    ].filter(doc => doc.url);
+
+    return res.status(200).json({
+      student,
+      academicInfo,
+      attendanceSummary,
+      homeworkSummary,
+      lectureProgress,
+      activityTimeline: activityTimeline.slice(0, 10),
+      documents
+    });
   } catch (err) {
     return res.status(500).json({ message: err.message });
   }

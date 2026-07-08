@@ -43,17 +43,17 @@ export const getAllSyllabi = async (req, res) => {
     const syllabi = await Syllabus.find()
       .populate({
         path: "lectures",
-        populate: {
-          path: "assignedTo",
-          select: "name email phone",
-        },
+        populate: [
+          { path: "assignedTo", select: "name email phone" },
+          { path: "referenceTo", select: "title description duration" }
+        ],
       })
       .populate({
         path: "topics", // compatibility
-        populate: {
-          path: "assignedTo",
-          select: "name email phone",
-        },
+        populate: [
+          { path: "assignedTo", select: "name email phone" },
+          { path: "referenceTo", select: "title description duration" }
+        ],
       })
       .populate("assignedTeacher", "name email phone")
       .populate("createdBy", "name email")
@@ -72,17 +72,17 @@ export const getSyllabusById = async (req, res) => {
     const syllabus = await Syllabus.findById(req.params.syllabusId)
       .populate({
         path: "lectures",
-        populate: {
-          path: "assignedTo",
-          select: "name email phone",
-        },
+        populate: [
+          { path: "assignedTo", select: "name email phone" },
+          { path: "referenceTo", select: "title description duration" }
+        ],
       })
       .populate({
         path: "topics", // compatibility
-        populate: {
-          path: "assignedTo",
-          select: "name email phone",
-        },
+        populate: [
+          { path: "assignedTo", select: "name email phone" },
+          { path: "referenceTo", select: "title description duration" }
+        ],
       })
       .populate("assignedTeacher", "name email phone")
       .populate("createdBy", "name email");

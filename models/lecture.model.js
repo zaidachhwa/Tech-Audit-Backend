@@ -52,6 +52,11 @@ const lectureSchema = new mongoose.Schema(
     completedAt: { type: Date },
     remarks: { type: String, default: "" },
     subLectures: [subLectureSchema],
+    referenceTo: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Lecture",
+      default: null
+    },
     
     // Optional student-level template progress
     studentsProgress: [
