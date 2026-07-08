@@ -232,10 +232,10 @@ export const getStudentById = async (req, res) => {
       .lean();
 
     const totalHomework = homeworkHistory.length;
-    const submitted = homeworkHistory.filter(h => h.status !== "Assigned").length;
-    const approved = homeworkHistory.filter(h => h.status === "Approved" || h.status === "Completed").length;
-    const pending = homeworkHistory.filter(h => h.status === "Pending Approval" || h.status === "Submitted").length;
-    const rejected = homeworkHistory.filter(h => h.status === "Rejected").length;
+    const submitted = homeworkHistory.filter(h => h.status !== "assigned").length;
+    const approved = homeworkHistory.filter(h => h.status === "approved").length;
+    const pending = homeworkHistory.filter(h => h.status === "pending_review").length;
+    const rejected = homeworkHistory.filter(h => h.status === "rejected").length;
 
     const homeworkSummary = {
       totalHomework,

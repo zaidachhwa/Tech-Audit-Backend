@@ -15,7 +15,7 @@ export const getAdminDashboard = async (req, res) => {
     const totalSubjects = await Syllabus.countDocuments();
     const totalBatches = await Batch.countDocuments();
     const totalLectures = await Lecture.countDocuments({ lectureType: "Normal" });
-    const pendingHomework = await Homework.countDocuments({ status: "Pending Approval" });
+    const pendingHomework = await Homework.countDocuments({ status: "pending_review" });
     const completedLectures = await BatchLecture.countDocuments({ completionStatus: "Completed" });
 
     // Calculate overall average subject progress
@@ -62,12 +62,12 @@ export const getTeacherDashboard = async (req, res) => {
     // Homework assigned by teacher
     const pendingHomework = await Homework.countDocuments({
       assignedBy: teacherId,
-      status: "Pending Approval"
+      status: "pending_review"
     });
 
     const completedHomework = await Homework.countDocuments({
       assignedBy: teacherId,
-      status: "Approved"
+      status: "approved"
     });
 
     // Subject Progress for teacher's subjects

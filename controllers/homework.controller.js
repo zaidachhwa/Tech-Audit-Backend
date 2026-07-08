@@ -81,7 +81,7 @@ export const createHomework = async (req, res) => {
         batchName: batchDoc?.batch_name || "",
         batchNumber: batchDoc?.batch_no || "",
         assignedBy: req.user.id,
-        status: "Assigned",
+        status: "assigned",
         attachments: attachments || []
       });
     });
@@ -101,6 +101,7 @@ export const createHomework = async (req, res) => {
 export const getHomework = async (req, res) => {
   try {
     const homeworkList = await Homework.find()
+      .sort({ createdAt: -1 })
       .populate("student", "name email")
       .populate("assignedBy", "name email")
       .populate("lecture", "title")
@@ -237,10 +238,10 @@ export const submitHomework = async (req, res) => {
       submissionText: submissionText || "",
       fileName: finalAttachments.length > 0 ? finalAttachments[0].split("/").pop() : "attachment",
       fileUrl: finalAttachments.length > 0 ? finalAttachments[0] : "",
-      status: "Pending Approval"
+      status: "pending_review"
     });
 
-    homework.status = "Pending Approval";
+    homework.status = "pending_review";
     await homework.save();
 
     res.json({ message: "Homework submitted successfully", homework });
@@ -288,7 +289,7 @@ export const getStudentHomeworkHistory = async (req, res) => {
       .populate("lecture", "title")
       .select("title submissions lecture");
 
-    const history = homeworkList.flatMap((hw) => 
+    const history = homeworkList.flatMap((hw) =>
       hw.submissions.map((sub) => ({
         homeworkId: hw._id,
         homeworkTitle: hw.title,
@@ -316,7 +317,7 @@ export const getStudentHomeworkHistory = async (req, res) => {
  */
 export const getPendingHomework = async (req, res) => {
   try {
-    const pendingList = await Homework.find({ status: "Pending Approval" })
+    const pendingList = await Homework.find({ status: "pending_review" })
       .populate("student", "name email")
       .populate("assignedBy", "name email")
       .populate("lecture", "title")
@@ -342,13 +343,13 @@ export const approveHomework = async (req, res) => {
 
     const sub = homework.submissions.id(submissionId);
     if (sub) {
-      sub.status = "Approved";
+      sub.status = "approved";
       sub.remarks = remarks || "";
       sub.reviewedBy = req.user.id;
       sub.reviewedAt = new Date();
     }
 
-    homework.status = "Approved";
+    homework.status = "approved";
     await homework.save();
 
     res.json({ message: "Homework submission approved successfully", homework });
@@ -372,13 +373,13 @@ export const rejectHomework = async (req, res) => {
 
     const sub = homework.submissions.id(submissionId);
     if (sub) {
-      sub.status = "Rejected";
+      sub.status = "rejected";
       sub.remarks = remarks || "";
       sub.reviewedBy = req.user.id;
       sub.reviewedAt = new Date();
     }
 
-    homework.status = "Rejected";
+    homework.status = "rejected";
     await homework.save();
 
     res.json({ message: "Homework submission rejected successfully", homework });

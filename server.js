@@ -59,7 +59,52 @@ app.use(
 // CONNECT DB
 mongoose
   .connect(MONGODB_URL)
-  .then(() => console.log("MongoDB Connected"))
+  .then(async () => {
+    console.log("MongoDB Connected");
+    try {
+      // Migrate Homework statuses to lowercase
+      await mongoose.model("Homework").updateMany(
+        { status: "Assigned" },
+        { $set: { status: "assigned" } }
+      );
+      await mongoose.model("Homework").updateMany(
+        { status: { $in: ["Pending Approval", "Submitted"] } },
+        { $set: { status: "pending_review" } }
+      );
+      await mongoose.model("Homework").updateMany(
+        { status: "Approved" },
+        { $set: { status: "approved" } }
+      );
+      await mongoose.model("Homework").updateMany(
+        { status: "Rejected" },
+        { $set: { status: "rejected" } }
+      );
+      
+      // Migrate submissions status inside homework documents
+      const homeworks = await mongoose.model("Homework").find({ "submissions.status": { $exists: true } });
+      for (const hw of homeworks) {
+        let changed = false;
+        hw.submissions.forEach((sub) => {
+          const oldStatus = sub.status;
+          if (oldStatus === "Pending Approval" || oldStatus === "Submitted") {
+            sub.status = "pending_review";
+            changed = true;
+          } else if (oldStatus === "Approved") {
+            sub.status = "approved";
+            changed = true;
+          } else if (oldStatus === "Rejected") {
+            sub.status = "rejected";
+            changed = true;
+          }
+        });
+        if (changed) {
+          await hw.save();
+        }
+      }
+    } catch (migrateErr) {
+      console.error("Migration error:", migrateErr);
+    }
+  })
   .catch((err) => console.error("Mongo Error:", err));
 
 // ROUTES

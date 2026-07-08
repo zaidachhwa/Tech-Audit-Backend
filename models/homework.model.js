@@ -7,8 +7,8 @@ const homeworkSubmissionSchema = new mongoose.Schema({
   submittedAt: { type: Date, default: Date.now },
   status: {
     type: String,
-    enum: ["Submitted", "Pending Approval", "Approved", "Rejected"],
-    default: "Pending Approval"
+    enum: ["assigned", "pending_review", "approved", "rejected"],
+    default: "pending_review"
   },
   remarks: { type: String, default: "" },
   reviewedBy: { type: mongoose.Schema.Types.ObjectId, ref: "Teacher" },
@@ -44,8 +44,8 @@ const homeworkSchema = new mongoose.Schema(
     attachments: [{ type: String }],
     status: {
       type: String,
-      enum: ["Assigned", "Submitted", "Pending Approval", "Approved", "Rejected"],
-      default: "Assigned",
+      enum: ["assigned", "pending_review", "approved", "rejected"],
+      default: "assigned",
     },
     assignedBy: { type: mongoose.Schema.Types.ObjectId, ref: "Teacher" },
     submissions: [homeworkSubmissionSchema], // Submission history
