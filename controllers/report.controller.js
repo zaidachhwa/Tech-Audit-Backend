@@ -4,6 +4,7 @@ import * as reportService from "../services/report.service.js";
 import Report from "../models/report.model.js";
 import Student from "../models/student.model.js";
 import axios from "axios";
+import fs from "fs";
 
 export const generateFeedback = async (req, res) => {
   try {
@@ -640,39 +641,31 @@ export const generateReportPdf = async (req, res) => {
 
     // ---------- Signatures ----------
 
-    // ---------- Signatures (FIXED POSITION) ----------
-
-    // Position signatures safely above footer
-    const sigY = doc.page.height - FOOTER_HEIGHT - 40;
-
-    // If current flowing content is already too low, move to new page
-    if (doc.y > sigY - 20) {
+    if (doc.y + 130 > doc.page.height - FOOTER_HEIGHT) {
+      drawFooter();
       doc.addPage();
       drawHeader();
+      doc.moveDown(2);
     }
+    const sigY = doc.y + 115;
 
-    // Left signature line
-    doc.moveTo(50, sigY).lineTo(250, sigY).stroke();
+    const authSignImg = path.join(process.cwd(), "public", "Sign.png");
+    const authStampImg = path.join(process.cwd(), "public", "Stamp.png");
 
-    // Right signature line
-    doc.moveTo(320, sigY).lineTo(520, sigY).stroke();
+    if (fs.existsSync(authSignImg)) {
+      try { doc.image(authSignImg, 60, sigY - 95, { height: 85 }); } catch (e) { console.error("Auth Sign Error:", e.message); }
+    }
+    doc.moveTo(50, sigY).lineTo(190, sigY).stroke();
+    doc.fontSize(9).fillColor("#666").font("Helvetica").text("Authorized Signatory", 50, sigY + 8, { width: 140, align: "center" });
 
-    doc
-      .fontSize(9)
-      .fillColor("#666")
-      .font("Helvetica")
-      .text(
-        "Evaluator's Signature and Stamp",
-        50,
-        sigY + 8,
-        { width: 200, align: "center" }
-      )
-      .text(
-        "Student's Signature",
-        320,
-        sigY + 8,
-        { width: 200, align: "center" }
-      );
+    if (fs.existsSync(authStampImg)) {
+      try { doc.image(authStampImg, 240, sigY - 110, { height: 100 }); } catch (e) { console.error("Auth Stamp Error:", e.message); }
+    }
+    doc.moveTo(230, sigY).lineTo(370, sigY).stroke();
+    doc.fontSize(9).fillColor("#666").font("Helvetica").text("Authorized Stamp", 230, sigY + 8, { width: 140, align: "center" });
+
+    doc.moveTo(410, sigY).lineTo(550, sigY).stroke();
+    doc.fontSize(9).fillColor("#666").font("Helvetica").text("Parents Signature", 410, sigY + 8, { width: 140, align: "center" });
 
     // ---------- Footer ----------
     drawFooter();
@@ -990,24 +983,32 @@ export const generateReportPreviewPdf = async (req, res) => {
     });
 
     // ---------- Signatures ----------
-    ensureSpace(40);
 
-    const sigY = doc.y + 40;
+    if (doc.y + 130 > doc.page.height - FOOTER_HEIGHT) {
+      drawFooter();
+      doc.addPage();
+      drawHeader();
+      doc.moveDown(2);
+    }
+    const sigY = doc.y + 115;
 
-    doc.moveTo(50, sigY).lineTo(250, sigY).stroke();
-    doc.moveTo(320, sigY).lineTo(520, sigY).stroke();
+    const authSignImg = path.join(process.cwd(), "public", "Sign.png");
+    const authStampImg = path.join(process.cwd(), "public", "Stamp.png");
 
-    doc
-      .fontSize(9)
-      .fillColor("#666")
-      .text("Evaluator's Signature and Stamp", 50, sigY + 8, {
-        width: 200,
-        align: "center",
-      })
-      .text("Student's Signature", 320, sigY + 8, {
-        width: 200,
-        align: "center",
-      });
+    if (fs.existsSync(authSignImg)) {
+      try { doc.image(authSignImg, 60, sigY - 95, { height: 85 }); } catch (e) { console.error("Auth Sign Error:", e.message); }
+    }
+    doc.moveTo(50, sigY).lineTo(190, sigY).stroke();
+    doc.fontSize(9).fillColor("#666").font("Helvetica").text("Authorized Signatory", 50, sigY + 8, { width: 140, align: "center" });
+
+    if (fs.existsSync(authStampImg)) {
+      try { doc.image(authStampImg, 240, sigY - 110, { height: 100 }); } catch (e) { console.error("Auth Stamp Error:", e.message); }
+    }
+    doc.moveTo(230, sigY).lineTo(370, sigY).stroke();
+    doc.fontSize(9).fillColor("#666").font("Helvetica").text("Authorized Stamp", 230, sigY + 8, { width: 140, align: "center" });
+
+    doc.moveTo(410, sigY).lineTo(550, sigY).stroke();
+    doc.fontSize(9).fillColor("#666").font("Helvetica").text("Parents Signature", 410, sigY + 8, { width: 140, align: "center" });
 
     // ---------- Footer ----------
     drawFooter();
