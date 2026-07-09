@@ -17,25 +17,30 @@ export const generateFeedback = async (req, res) => {
       return res.status(500).json({ message: "GEMINI_API_KEY is not configured in the backend." });
     }
 
-    let prompt = "Generate exactly 3 concise, constructive feedback points for a student based on their performance in the following parameters:\n";
+    let prompt = "Analyze the student's performance based on the following parameters and scores:\n";
     parameters.forEach(p => {
       prompt += `- ${p.name}: ${p.score}/${p.totalScore || 10}\n`;
     });
-    prompt += "\nOutput ONLY 3 points, separated by a newline (no numbering, no intro, no bullet points). Each point should be a single brief sentence.";
+    prompt += "\nRespond ONLY with a valid JSON object matching this schema:\n";
+    prompt += `{\n  "points": ["string", "string", "string"],\n  "overallRemarks": "string"\n}\n`;
+    prompt += "The 'points' array MUST contain exactly 3 concise, constructive feedback sentences. The 'overallRemarks' MUST contain a 2-3 sentence overall summary of the student's performance.";
 
     const response = await axios.post(
       `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
       {
         contents: [{ parts: [{ text: prompt }] }],
+        generationConfig: { responseMimeType: "application/json" }
       }
     );
 
     const text = response.data.candidates[0].content.parts[0].text;
-    const points = text.split('\n').map(s => s.trim().replace(/^[-*•1234567890.]*/, '').trim()).filter(s => s.length > 0).slice(0, 3);
+    const parsed = JSON.parse(text);
     
+    let points = Array.isArray(parsed.points) ? parsed.points : [];
     while (points.length < 3) points.push("");
+    points = points.slice(0, 3);
 
-    return res.status(200).json({ feedback: points });
+    return res.status(200).json({ feedback: points, overallRemarks: parsed.overallRemarks || "" });
   } catch (err) {
     console.error("Gemini API Error:", err.response?.data || err.message);
     return res.status(500).json({ message: "Failed to generate feedback via AI." });
