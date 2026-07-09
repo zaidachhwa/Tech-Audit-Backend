@@ -12,6 +12,7 @@ import {
   deleteDraft,
   deleteReport,
   lookupReportByStudentAndDate,
+  generateFeedback,
 } from "../controllers/report.controller.js";
 
 import { verifyToken, isAdmin, isAdminOrTeacher } from "../middleware/auth.middleware.js";
@@ -21,6 +22,8 @@ const router = express.Router();
 /* ================= NORMAL REPORTS ================= */
 
 router.post("/create", verifyToken, isAdminOrTeacher, createReport);
+
+router.post("/generate-feedback", verifyToken, isAdminOrTeacher, generateFeedback);
 
 router.get("/", verifyToken, isAdminOrTeacher, getAllReports);
 

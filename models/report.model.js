@@ -9,6 +9,7 @@ const feedbackSchema = new mongoose.Schema({
 const parameterSchema = new mongoose.Schema({
   name: { type: String, required: true },
   score: { type: Number, required: true },
+  totalScore: { type: Number, required: true, default: 10 },
 });
 
 const reportSchema = new mongoose.Schema(

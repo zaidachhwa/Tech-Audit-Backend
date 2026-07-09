@@ -3,6 +3,44 @@ import PDFDocument from "pdfkit";
 import * as reportService from "../services/report.service.js";
 import Report from "../models/report.model.js";
 import Student from "../models/student.model.js";
+import axios from "axios";
+
+export const generateFeedback = async (req, res) => {
+  try {
+    const { parameters } = req.body;
+    if (!parameters || parameters.length === 0) {
+      return res.status(400).json({ message: "Parameters required for generating feedback." });
+    }
+
+    const apiKey = process.env.GEMINI_API_KEY;
+    if (!apiKey) {
+      return res.status(500).json({ message: "GEMINI_API_KEY is not configured in the backend." });
+    }
+
+    let prompt = "Generate exactly 3 concise, constructive feedback points for a student based on their performance in the following parameters:\n";
+    parameters.forEach(p => {
+      prompt += `- ${p.name}: ${p.score}/${p.totalScore || 10}\n`;
+    });
+    prompt += "\nOutput ONLY 3 points, separated by a newline (no numbering, no intro, no bullet points). Each point should be a single brief sentence.";
+
+    const response = await axios.post(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
+      {
+        contents: [{ parts: [{ text: prompt }] }],
+      }
+    );
+
+    const text = response.data.candidates[0].content.parts[0].text;
+    const points = text.split('\n').map(s => s.trim().replace(/^[-*•1234567890.]*/, '').trim()).filter(s => s.length > 0).slice(0, 3);
+    
+    while (points.length < 3) points.push("");
+
+    return res.status(200).json({ feedback: points });
+  } catch (err) {
+    console.error("Gemini API Error:", err.response?.data || err.message);
+    return res.status(500).json({ message: "Failed to generate feedback via AI." });
+  }
+};
 
 export const createReport = async (req, res) => {
   try {
@@ -12,6 +50,13 @@ export const createReport = async (req, res) => {
       return res
         .status(400)
         .json({ message: "studentId & parameters required" });
+
+    for (const p of parameters) {
+      if (Number(p.score) > (Number(p.totalScore) || 10)) {
+        return res.status(400).json({ message: `Obtained score cannot exceed total score for parameter: ${p.name}` });
+      }
+    }
+
     const report = await reportService.createReportService({
       studentId,
       parameters,
@@ -35,6 +80,14 @@ export const saveDraftReport = async (req, res) => {
     //studentId is mandatory else draft is not identify
     if (!studentId) {
       return res.status(400).json({ message: "studentId required" });
+    }
+
+    if (parameters && parameters.length) {
+      for (const p of parameters) {
+        if (Number(p.score) > (Number(p.totalScore) || 10)) {
+          return res.status(400).json({ message: `Obtained score cannot exceed total score for parameter: ${p.name}` });
+        }
+      }
     }
 
     //same student + same audit date backend search the same existing draft (no multiple drafts craeated)
@@ -391,14 +444,14 @@ export const generateReportPdf = async (req, res) => {
           width: cardWidth - 120,
           align: "left",
         });
-      // ---- Score-based colors ----
+      let percentage = (p.score / (p.totalScore || 10)) * 100;
       let badgeStrokeColor = "#10B981"; // green
       let badgeTextColor = "#059669";
 
-      if (p.score <= 4) {
+      if (percentage <= 40) {
         badgeStrokeColor = "#EF4444"; // red
         badgeTextColor = "#DC2626";
-      } else if (p.score <= 7) {
+      } else if (percentage <= 70) {
         badgeStrokeColor = "#F59E0B"; // yellow
         badgeTextColor = "#D97706";
       }
@@ -418,7 +471,7 @@ export const generateReportPdf = async (req, res) => {
         .fontSize(10)
         .fillColor(badgeTextColor)
         .font("Helvetica-Bold")
-        .text(`${p.score} / 10`, badgeX, badgeY + 5, {
+        .text(`${p.score} / ${p.totalScore || 10}`, badgeX, badgeY + 5, {
           width: badgeWidth,
           align: "center",
         });
@@ -426,7 +479,65 @@ export const generateReportPdf = async (req, res) => {
       doc.moveDown(2);
     });
 
-    doc.moveDown(1);
+    let grandObtained1 = 0;
+    let grandTotal1 = 0;
+    report.parameters.forEach(p => {
+      if (p.name && p.name.trim()) {
+        grandObtained1 += Number(p.score) || 0;
+        grandTotal1 += Number(p.totalScore) || 10;
+      }
+    });
+    
+    const grandPercentage1 = grandTotal1 > 0 ? (grandObtained1 / grandTotal1) * 100 : 0;
+    const getGrade1 = (percentage) => {
+      if (percentage >= 90) return "A+";
+      if (percentage >= 80) return "A";
+      if (percentage >= 70) return "B+";
+      if (percentage >= 60) return "B";
+      if (percentage >= 50) return "C";
+      if (percentage >= 40) return "D";
+      if (grandTotal1 === 0) return "-";
+      return "F";
+    };
+    const grade1 = getGrade1(grandPercentage1);
+
+    ensureSpace(cardHeight + 10);
+    const gtY1 = doc.y;
+    doc
+      .roundedRect(leftX, gtY1, cardWidth, cardHeight, radius)
+      .lineWidth(1)
+      .strokeColor("#E5E7EB") // light gray border
+      .stroke();
+
+    doc
+      .fontSize(10)
+      .fillColor("#000")
+      .font("Helvetica-Bold")
+      .text("Grand Total", leftX + 12, gtY1 + 10, {
+        width: cardWidth - 120,
+        align: "left",
+      });
+
+    const gtBadgeWidth1 = 120;
+    const gtBadgeHeight1 = 20;
+    const gtBadgeX1 = leftX + cardWidth - gtBadgeWidth1 - 12;
+    const gtBadgeY1 = gtY1 + 7;
+
+    doc
+      .roundedRect(gtBadgeX1, gtBadgeY1, gtBadgeWidth1, gtBadgeHeight1, 5)
+      .lineWidth(1)
+      .fillAndStroke("#EFF6FF", "#BFDBFE");
+
+    doc
+      .fontSize(10)
+      .fillColor("#1D4ED8")
+      .font("Helvetica-Bold")
+      .text(`${grandObtained1} / ${grandTotal1}  |  Grade: ${grade1}`, gtBadgeX1, gtBadgeY1 + 5, {
+        width: gtBadgeWidth1,
+        align: "center",
+      });
+
+    doc.moveDown(1.5);
 
     // ---------- Overall Remarks ----------
     ensureSpace(100);
@@ -716,13 +827,14 @@ export const generateReportPreviewPdf = async (req, res) => {
           width: cardWidth - 120,
         });
 
+      let percentage = (p.score / (p.totalScore || 10)) * 100;
       let badgeStrokeColor = "#10B981";
       let badgeTextColor = "#059669";
 
-      if (p.score <= 4) {
+      if (percentage <= 40) {
         badgeStrokeColor = "#EF4444";
         badgeTextColor = "#DC2626";
-      } else if (p.score <= 7) {
+      } else if (percentage <= 70) {
         badgeStrokeColor = "#F59E0B";
         badgeTextColor = "#D97706";
       }
@@ -742,13 +854,73 @@ export const generateReportPreviewPdf = async (req, res) => {
         .fontSize(10)
         .fillColor(badgeTextColor)
         .font("Helvetica-Bold")
-        .text(`${p.score} / 10`, badgeX, badgeY + 5, {
+        .text(`${p.score} / ${p.totalScore || 10}`, badgeX, badgeY + 5, {
           width: badgeWidth,
           align: "center",
         });
 
       doc.moveDown(2);
     });
+
+    let grandObtained2 = 0;
+    let grandTotal2 = 0;
+    report.parameters.forEach(p => {
+      if (p.name && p.name.trim()) {
+        grandObtained2 += Number(p.score) || 0;
+        grandTotal2 += Number(p.totalScore) || 10;
+      }
+    });
+    
+    const grandPercentage2 = grandTotal2 > 0 ? (grandObtained2 / grandTotal2) * 100 : 0;
+    const getGrade2 = (percentage) => {
+      if (percentage >= 90) return "A+";
+      if (percentage >= 80) return "A";
+      if (percentage >= 70) return "B+";
+      if (percentage >= 60) return "B";
+      if (percentage >= 50) return "C";
+      if (percentage >= 40) return "D";
+      if (grandTotal2 === 0) return "-";
+      return "F";
+    };
+    const grade2 = getGrade2(grandPercentage2);
+
+    ensureSpace(cardHeight + 10);
+    const gtY2 = doc.y;
+    doc
+      .roundedRect(leftX, gtY2, cardWidth, cardHeight, radius)
+      .lineWidth(1)
+      .strokeColor("#E5E7EB") // light gray border
+      .stroke();
+
+    doc
+      .fontSize(10)
+      .fillColor("#000")
+      .font("Helvetica-Bold")
+      .text("Grand Total", leftX + 12, gtY2 + 10, {
+        width: cardWidth - 120,
+        align: "left",
+      });
+
+    const gtBadgeWidth2 = 120;
+    const gtBadgeHeight2 = 20;
+    const gtBadgeX2 = leftX + cardWidth - gtBadgeWidth2 - 12;
+    const gtBadgeY2 = gtY2 + 7;
+
+    doc
+      .roundedRect(gtBadgeX2, gtBadgeY2, gtBadgeWidth2, gtBadgeHeight2, 5)
+      .lineWidth(1)
+      .fillAndStroke("#EFF6FF", "#BFDBFE");
+
+    doc
+      .fontSize(10)
+      .fillColor("#1D4ED8")
+      .font("Helvetica-Bold")
+      .text(`${grandObtained2} / ${grandTotal2}  |  Grade: ${grade2}`, gtBadgeX2, gtBadgeY2 + 5, {
+        width: gtBadgeWidth2,
+        align: "center",
+      });
+
+    doc.moveDown(1.5);
 
     // ---------- Overall Remarks ----------
     ensureSpace(100);
