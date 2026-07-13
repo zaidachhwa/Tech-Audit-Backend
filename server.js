@@ -27,6 +27,7 @@ import notificationRoutes from "./routes/notification.routes.js";
 import settingsRoutes from "./routes/settings.routes.js";
 import activityLogRoutes from "./routes/activityLog.routes.js";
 import uploadRoutes from "./routes/upload.routes.js";
+import lmsRoutes from "./routes/lms.routes.js";
 import { errorHandler } from "./middleware/error.middleware.js";
 import {
   MONGODB_URL,
@@ -129,6 +130,7 @@ app.use("/api/notifications", notificationRoutes);
 app.use("/api/settings", settingsRoutes);
 app.use("/api/activity-log", activityLogRoutes);
 app.use("/api/upload", uploadRoutes);
+app.use("/api/lms", lmsRoutes);
 app.use("/api", homeworkRoutes);
 app.use("/api/assignment", homeworkRoutes); // compatibility
 app.use("/api", lectureRoutes);
