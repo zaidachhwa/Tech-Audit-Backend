@@ -126,7 +126,6 @@ export const getAttendanceForMonth = async (req, res) => {
 
     const records = await Attendance.find({
       batch: batchId,
-      teacher: teacherId,
       date: { $gte: start, $lte: end },
     }).populate("records.student", "name email");
 
