@@ -63,6 +63,60 @@ export const createReport = async (req, res) => {
       }
     }
 
+    // ✅ Guard: Block only when same student + same date + same parameters
+    // Rules:
+    //   same date + same params  → BLOCKED  ("exact duplicate")
+    //   same date + diff params  → ALLOWED  (new report for same day, different data)
+    //   diff date + same params  → ALLOWED  (recurring audit with same scores)
+    //   diff date + diff params  → ALLOWED
+
+    // Normalize helper — sort params by name for order-independent comparison
+    const normalize = (params) =>
+      [...params]
+        .filter((p) => p.name?.trim())
+        .sort((a, b) => a.name.trim().toLowerCase().localeCompare(b.name.trim().toLowerCase()))
+        .map((p) => ({
+          name: p.name.trim().toLowerCase(),
+          score: Number(p.score),
+          totalScore: Number(p.totalScore) || 10,
+        }));
+
+    if (auditDate) {
+      const dayStart = new Date(auditDate);
+      dayStart.setUTCHours(0, 0, 0, 0);
+      const dayEnd = new Date(auditDate);
+      dayEnd.setUTCHours(23, 59, 59, 999);
+
+      // Fetch all published reports for this student on the same date
+      const sameDateReports = await Report.find({
+        student: studentId,
+        auditDate: { $gte: dayStart, $lte: dayEnd },
+        status: { $ne: "draft" },
+      }).lean();
+
+      const incomingNorm = normalize(parameters);
+
+      for (const existing of sameDateReports) {
+        const existingNorm = normalize(existing.parameters || []);
+        if (existingNorm.length !== incomingNorm.length) continue;
+
+        const allMatch = incomingNorm.every(
+          (p, i) =>
+            p.name === existingNorm[i].name &&
+            p.score === existingNorm[i].score &&
+            p.totalScore === existingNorm[i].totalScore
+        );
+
+        if (allMatch) {
+          return res.status(409).json({
+            reason: "data_duplicate",
+            message: "A report with the same data already exists for this student on this date.",
+            reportId: existing._id,
+          });
+        }
+      }
+    }
+
     const report = await reportService.createReportService({
       studentId,
       parameters,
@@ -75,6 +129,7 @@ export const createReport = async (req, res) => {
     return res.status(500).json({ message: err.message });
   }
 };
+
 
 
 export const saveDraftReport = async (req, res) => {
