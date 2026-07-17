@@ -8,6 +8,7 @@ import { Syllabus } from "../models/syllabus.model.js";
 import Homework from "../models/homework.model.js";
 import { Attendance } from "../models/attendance.model.js";
 import { ActivityLog } from "../models/activityLog.model.js";
+import { sendStudentCredentials, generateRandomPassword } from "../utils/email.js";
 
 const JWT_SECRET = process.env.JWT_SECRET;
 
@@ -33,15 +34,40 @@ export const registerStudent = async (req, res) => {
       aadhaarPhoto
     } = req.body;
 
-    if (!name || !email || !password || !batch_name || !batch_no) {
-      return res.status(400).json({ message: "Name, email, password, and batch name/number are required" });
+    if (!name || !email || !batch_name || !batch_no) {
+      return res.status(400).json({ message: "Name, email, and batch name/number are required" });
+    }
+
+    // Detect if this is an admin/teacher action by decoding authorization header
+    let isAdminAction = false;
+    const authHeader = req.headers.authorization;
+    if (authHeader && authHeader.startsWith("Bearer ")) {
+      try {
+        const token = authHeader.split(" ")[1];
+        const decoded = jwt.verify(token, JWT_SECRET);
+        if (decoded.role === "admin" || decoded.role === "teacher") {
+          isAdminAction = true;
+        }
+      } catch (err) {
+        // Ignore token verify error for public action
+      }
+    }
+
+    let finalPassword = password;
+    let shouldSendEmail = false;
+
+    if (!finalPassword || isAdminAction) {
+      if (!finalPassword) {
+        finalPassword = generateRandomPassword();
+      }
+      shouldSendEmail = true;
     }
 
     const exists = await Student.findOne({ email });
     if (exists)
       return res.status(400).json({ message: "Student already exists" });
 
-    const hashed = await bcrypt.hash(password, 10);
+    const hashed = await bcrypt.hash(finalPassword, 10);
 
     const student = await Student.create({
       name,
@@ -70,6 +96,11 @@ export const registerStudent = async (req, res) => {
         batch.students.push(student._id);
       }
       await batch.save();
+    }
+
+    // Send credentials via email if applicable
+    if (shouldSendEmail) {
+      await sendStudentCredentials(email, name, finalPassword);
     }
 
     const token = jwt.sign({ id: student._id, role: "student" }, JWT_SECRET, {
@@ -339,6 +370,48 @@ export const getAllStudents = async (req, res) => {
       q.batch_no = { $regex: new RegExp(`^${batchNumber.toString().trim()}$`, "i") };
     }
 
+    // 🔒 RESTRICT TEACHERS TO THEIR ASSIGNED BATCHES
+    if (req.user && req.user.role === "teacher") {
+      const Schedule = mongoose.model("Schedule");
+      const BatchLecture = mongoose.model("BatchLecture");
+      const Batch = mongoose.model("Batch");
+
+      const teacherSchedules = await Schedule.find({ teacher: req.user.id }).select("batch").lean();
+      const scheduleBatchIds = teacherSchedules.map(s => s.batch);
+
+      const teacherLectures = await BatchLecture.find({
+        $or: [{ assignedTo: req.user.id }, { teacherIds: req.user.id }]
+      }).select("batch").lean();
+      const lectureBatchIds = teacherLectures.map(l => l.batch);
+
+      const allBatchIds = [...new Set([...scheduleBatchIds.map(id => id.toString()), ...lectureBatchIds.map(id => id.toString())])];
+      const teacherBatches = await Batch.find({ _id: { $in: allBatchIds } }).lean();
+
+      if (teacherBatches.length > 0) {
+        const batchConditions = teacherBatches.map(b => ({
+          batch_name: { $regex: new RegExp(`^${b.batch_name.trim()}$`, "i") },
+          batch_no: { $regex: new RegExp(`^${b.batch_no.toString().trim()}$`, "i") }
+        }));
+        
+        if (q.$or) {
+          // If search condition already has $or, wrap them
+          q = { $and: [q, { $or: batchConditions }] };
+        } else {
+          q.$or = batchConditions;
+        }
+      } else {
+        // Teacher has no batches, return empty results
+        return res.status(200).json({
+          total: 0,
+          totalActive: 0,
+          totalPending: 0,
+          page: Number(page),
+          limit: Number(limit),
+          students: []
+        });
+      }
+    }
+
     const total = await Student.countDocuments(q);
     const totalActive = await Student.countDocuments({
       ...q,
@@ -512,7 +585,7 @@ export const updateMe = async (req, res) => {
       if (!ok)
         return res
           .status(400)
-          .json({ message: "Current password incorrect" });
+          .json({ message: "Wrong Password" });
 
       student.password = await bcrypt.hash(newPassword, 10);
     }

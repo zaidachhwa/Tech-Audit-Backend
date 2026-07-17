@@ -1,6 +1,7 @@
 import bcrypt from "bcryptjs";
 import { Student } from "../models/student.model.js";
 import Batch from "../models/batch.model.js";
+import { sendStudentCredentials, generateRandomPassword } from "../utils/email.js";
 
 /**
  * Robust CSV parser that handles double quotes, carriage returns, commas,
@@ -79,9 +80,9 @@ export const bulkImportStudents = async (req, res) => {
     const emailIndex = headers.indexOf("email");
     const phoneIndex = headers.indexOf("phone");
 
-    if (nameIndex === -1 || emailIndex === -1 || phoneIndex === -1) {
+    if (nameIndex === -1 || emailIndex === -1) {
       return res.status(400).json({
-        message: "Invalid CSV headers. The CSV must contain headers for 'name', 'email', and 'phone'."
+        message: "Invalid CSV headers. The CSV must contain headers for 'name' and 'email'."
       });
     }
 
@@ -96,11 +97,9 @@ export const bulkImportStudents = async (req, res) => {
 
     const errors = [];
     const validStudents = [];
+    const passwordsToEmail = [];
     let successCount = 0;
     let failedCount = 0;
-
-    // Hash the default password once to use for all imported students
-    const hashedPassword = await bcrypt.hash("Student@123", 10);
 
     // 6. Validate row-by-row
     for (let i = 1; i < parsedLines.length; i++) {
@@ -114,14 +113,14 @@ export const bulkImportStudents = async (req, res) => {
 
       const name = row[nameIndex]?.trim() || "";
       const email = row[emailIndex]?.trim() || "";
-      const phone = row[phoneIndex]?.trim() || "";
+      const phone = phoneIndex !== -1 ? (row[phoneIndex]?.trim() || "") : "";
 
-      // All fields are mandatory
-      if (!name || !email || !phone) {
+      // Name and Email are mandatory
+      if (!name || !email) {
         failedCount++;
         errors.push({
           row: rowNum,
-          reason: `Missing required fields. Name, email, and phone are mandatory.`
+          reason: `Missing required fields. Name and email are mandatory.`
         });
         continue;
       }
@@ -149,7 +148,7 @@ export const bulkImportStudents = async (req, res) => {
         continue;
       }
 
-      if (csvPhones.has(phone)) {
+      if (phone && csvPhones.has(phone)) {
         failedCount++;
         errors.push({
           row: rowNum,
@@ -168,7 +167,7 @@ export const bulkImportStudents = async (req, res) => {
         continue;
       }
 
-      if (existingPhones.has(phone)) {
+      if (phone && existingPhones.has(phone)) {
         failedCount++;
         errors.push({
           row: rowNum,
@@ -179,7 +178,13 @@ export const bulkImportStudents = async (req, res) => {
 
       // Add to CSV Sets for file-level uniqueness
       csvEmails.add(emailLower);
-      csvPhones.add(phone);
+      if (phone) {
+        csvPhones.add(phone);
+      }
+
+      // Generate a unique password for each student and hash it
+      const rawPassword = generateRandomPassword();
+      const hashedPassword = await bcrypt.hash(rawPassword, 10);
 
       // Store in valid students list
       validStudents.push({
@@ -190,6 +195,13 @@ export const bulkImportStudents = async (req, res) => {
         batch_name,
         batch_no,
         isActive: true // Automatically approved when added by admin
+      });
+
+      // Keep track of credentials to email
+      passwordsToEmail.push({
+        email,
+        name,
+        password: rawPassword
       });
     }
 
@@ -204,9 +216,14 @@ export const bulkImportStudents = async (req, res) => {
         { _id: batch._id },
         { $addToSet: { students: { $each: insertedIds } } }
       );
+
+      // 9. Send email notifications to students
+      for (const item of passwordsToEmail) {
+        await sendStudentCredentials(item.email, item.name, item.password);
+      }
     }
 
-    // 9. Send detailed output response
+    // 10. Send detailed output response
     return res.status(200).json({
       successCount,
       failedCount,

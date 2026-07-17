@@ -170,7 +170,7 @@ export const changePassword = async (req, res) => {
 
     const isMatch = await bcrypt.compare(oldPassword, user.password);
     if (!isMatch) {
-      return res.status(400).json({ message: "Invalid old password" });
+      return res.status(400).json({ message: "Wrong Password" });
     }
 
     user.password = await bcrypt.hash(newPassword, 10);

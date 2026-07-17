@@ -3,6 +3,7 @@ import { Lecture } from "../models/lecture.model.js";
 import { BatchSyllabus } from "../models/batchSyllabus.model.js";
 import { BatchLecture } from "../models/batchLecture.model.js";
 import Batch from "../models/batch.model.js";
+import { Schedule } from "../models/schedule.model.js";
 import { Teacher } from "../models/teacher.model.js";
 import { Student } from "../models/student.model.js";
 import Homework from "../models/homework.model.js";
@@ -874,6 +875,46 @@ export const scheduleLecture = async (req, res) => {
     templateLecture.dueDate = new Date(dueDate);
     templateLecture.assignedTo = teacherId;
     await templateLecture.save();
+
+    // 🔗 Sync with Lecture Scheduler (Schedule model)
+    try {
+      const syllabusDoc = await Syllabus.findById(templateLecture.syllabus);
+      if (syllabusDoc) {
+        // 1. Remove this lecture title from any other Schedule for this batch to prevent duplicates/reschedules
+        await Schedule.updateMany(
+          { batch: batchId, "lectures.title": templateLecture.title },
+          { $pull: { lectures: { title: templateLecture.title } } }
+        );
+
+        // 2. Find or create the target schedule
+        let schedule = await Schedule.findOne({
+          subject: syllabusDoc.subject,
+          batch: batchId,
+          teacher: teacherId
+        });
+
+        if (!schedule) {
+          schedule = await Schedule.create({
+            subject: syllabusDoc.subject,
+            batch: batchId,
+            teacher: teacherId,
+            lectures: []
+          });
+        }
+
+        // 3. Add the scheduled lecture to this schedule
+        schedule.lectures.push({
+          title: templateLecture.title,
+          description: templateLecture.description,
+          date: new Date(dueDate),
+          status: "Scheduled",
+          teacher: teacherId
+        });
+        await schedule.save();
+      }
+    } catch (syncErr) {
+      console.error("Failed to sync scheduled lecture to Lecture Scheduler:", syncErr);
+    }
 
     res.json({
       message: "Lecture scheduled successfully",
