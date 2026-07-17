@@ -56,6 +56,7 @@ export const getAllSyllabi = async (req, res) => {
         ],
       })
       .populate("assignedTeacher", "name email phone")
+      .populate("assignedTeachers", "name email phone")
       .populate("createdBy", "name email")
       .sort({ createdAt: -1 });
     res.json({ syllabi });
@@ -85,6 +86,7 @@ export const getSyllabusById = async (req, res) => {
         ],
       })
       .populate("assignedTeacher", "name email phone")
+      .populate("assignedTeachers", "name email phone")
       .populate("createdBy", "name email");
 
     if (!syllabus) {
@@ -109,17 +111,14 @@ export const getSyllabusById = async (req, res) => {
  */
 export const assignSyllabusToBatch = async (req, res) => {
   try {
-    const { syllabusId, batchId, notes, dueDate } = req.body;
+    const { syllabusId, batchId, batchIds, notes, dueDate } = req.body;
 
-    if (!syllabusId || !batchId) {
+    const finalBatchIds = batchIds || (batchId ? [batchId] : []);
+
+    if (!syllabusId || finalBatchIds.length === 0) {
       return res.status(400).json({
-        message: "syllabusId and batchId required",
+        message: "syllabusId and batchId/batchIds required",
       });
-    }
-
-    const batch = await Batch.findById(batchId);
-    if (!batch) {
-      return res.status(404).json({ message: "Batch not found" });
     }
 
     const syllabus = await Syllabus.findById(syllabusId).populate("lectures");
@@ -127,57 +126,67 @@ export const assignSyllabusToBatch = async (req, res) => {
       return res.status(404).json({ message: "Syllabus not found" });
     }
 
-    const existing = await BatchSyllabus.findOne({
-      batch: batchId,
-      syllabus: syllabusId,
-    });
-
-    if (existing) {
-      return res.status(400).json({
-        message: "Syllabus already assigned to this batch",
-      });
-    }
-
-    const batchSyllabus = await BatchSyllabus.create({
-      batch: batchId,
-      syllabus: syllabusId,
-      assignedBy: req.user.id,
-      notes: notes || "",
-      dueDate: dueDate,
-    });
-
     const templateLectures = await Lecture.find({ syllabus: syllabusId });
+    const assignedBatches = [];
+    let totalLecturesCreated = 0;
 
-    let createdBatchLectures = [];
-    if (templateLectures.length > 0) {
-      const batchLectureDocs = templateLectures.map((lecture) => ({
-        batch: batchId,
+    for (const bId of finalBatchIds) {
+      const batch = await Batch.findById(bId);
+      if (!batch) {
+        continue;
+      }
+
+      // Check if already assigned
+      const existing = await BatchSyllabus.findOne({
+        batch: bId,
         syllabus: syllabusId,
-        templateLecture: lecture._id,
-        title: lecture.title,
-        description: lecture.description,
-        chapterId: lecture.chapterId,
-        duration: lecture.duration,
-        lectureType: lecture.lectureType,
-        order: lecture.order,
-        completionStatus: "Pending",
-        subLectures: lecture.subLectures.map(sl => ({
-          title: sl.title,
-          duration: sl.duration,
-          order: sl.order,
-          completionStatus: "Pending"
-        }))
-      }));
-      createdBatchLectures = await BatchLecture.insertMany(batchLectureDocs);
+      });
+
+      if (existing) {
+        continue;
+      }
+
+      const batchSyllabus = await BatchSyllabus.create({
+        batch: bId,
+        syllabus: syllabusId,
+        assignedBy: req.user.id,
+        notes: notes || "",
+        dueDate: dueDate,
+      });
+
+      assignedBatches.push(batchSyllabus);
+
+      if (templateLectures.length > 0) {
+        const batchLectureDocs = templateLectures.map((lecture) => ({
+          batch: bId,
+          syllabus: syllabusId,
+          templateLecture: lecture._id,
+          title: lecture.title,
+          description: lecture.description,
+          chapterId: lecture.chapterId,
+          duration: lecture.duration,
+          lectureType: lecture.lectureType,
+          order: lecture.order,
+          completionStatus: "Pending",
+          subLectures: lecture.subLectures.map(sl => ({
+            title: sl.title,
+            duration: sl.duration,
+            order: sl.order,
+            completionStatus: "Pending"
+          }))
+        }));
+        const createdBatchLectures = await BatchLecture.insertMany(batchLectureDocs);
+        totalLecturesCreated += createdBatchLectures.length;
+      }
     }
 
     res.status(201).json({
-      message: "Syllabus assigned to batch successfully",
-      batchSyllabus,
-      topicsCreated: createdBatchLectures.length, // compatibility
-      topics: createdBatchLectures, // compatibility
-      lecturesCreated: createdBatchLectures.length,
-      lectures: createdBatchLectures,
+      message: `Syllabus assigned to ${assignedBatches.length} batch(es) successfully`,
+      assignedBatches,
+      topicsCreated: totalLecturesCreated, // compatibility
+      topics: [], // compatibility
+      lecturesCreated: totalLecturesCreated,
+      lectures: [],
     });
   } catch (err) {
     console.error("Error assigning syllabus to batch:", err);
@@ -191,17 +200,19 @@ export const assignSyllabusToBatch = async (req, res) => {
 export const assignTeacherToSyllabus = async (req, res) => {
   try {
     const { syllabusId } = req.params;
-    const { teacherId } = req.body;
+    const { teacherId, teacherIds } = req.body;
 
-    if (!syllabusId || !teacherId) {
+    const finalTeacherIds = teacherIds || (teacherId ? [teacherId] : []);
+
+    if (!syllabusId || finalTeacherIds.length === 0) {
       return res.status(400).json({
-        message: "syllabusId and teacherId required",
+        message: "syllabusId and teacherId/teacherIds required",
       });
     }
 
-    const teacher = await Teacher.findById(teacherId);
-    if (!teacher) {
-      return res.status(404).json({ message: "Teacher not found" });
+    const teachersExist = await Teacher.find({ _id: { $in: finalTeacherIds } });
+    if (teachersExist.length !== finalTeacherIds.length) {
+      return res.status(404).json({ message: "One or more teachers not found" });
     }
 
     const syllabus = await Syllabus.findById(syllabusId).populate("lectures");
@@ -212,21 +223,28 @@ export const assignTeacherToSyllabus = async (req, res) => {
     // Update all template lectures
     await Lecture.updateMany(
       { syllabus: syllabusId },
-      { assignedTo: teacherId }
+      { 
+        assignedTo: finalTeacherIds[0] || null,
+        teacherIds: finalTeacherIds 
+      }
     );
 
-    // Update syllabus assigned teacher
+    // Update syllabus assigned teachers
     const updatedSyllabus = await Syllabus.findByIdAndUpdate(
       syllabusId,
-      { assignedTeacher: teacherId },
+      { 
+        assignedTeacher: finalTeacherIds[0] || null,
+        assignedTeachers: finalTeacherIds 
+      },
       { new: true }
     )
       .populate("lectures")
       .populate("assignedTeacher", "name email phone")
+      .populate("assignedTeachers", "name email phone")
       .populate("createdBy", "name email");
 
     res.json({
-      message: `Teacher assigned to syllabus "${syllabus.subject}" and all lectures updated`,
+      message: `Teachers assigned to syllabus "${syllabus.subject}" and all lectures updated`,
       syllabus: updatedSyllabus,
     });
   } catch (err) {
@@ -255,17 +273,31 @@ export const unassignTeacherFromSyllabus = async (req, res) => {
 
     if (syllabus.assignedTeacher?.toString() === teacherId) {
       syllabus.assignedTeacher = null;
-      await syllabus.save();
     }
+
+    if (syllabus.assignedTeachers && syllabus.assignedTeachers.length > 0) {
+      syllabus.assignedTeachers = syllabus.assignedTeachers.filter(
+        (id) => id.toString() !== teacherId
+      );
+    }
+    await syllabus.save();
 
     await Lecture.updateMany(
       { syllabus: syllabusId, assignedTo: teacherId },
       { assignedTo: null }
     );
+    await Lecture.updateMany(
+      { syllabus: syllabusId },
+      { $pull: { teacherIds: teacherId } }
+    );
     
     await BatchLecture.updateMany(
       { syllabus: syllabusId, assignedTo: teacherId },
       { assignedTo: null }
+    );
+    await BatchLecture.updateMany(
+      { syllabus: syllabusId },
+      { $pull: { teacherIds: teacherId } }
     );
 
     res.json({

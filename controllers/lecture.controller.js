@@ -821,3 +821,65 @@ export const assignTeacherToBatchLecture = async (req, res) => {
     res.status(500).json({ message: err.message });
   }
 };
+
+export const scheduleLecture = async (req, res) => {
+  try {
+    const { topicId } = req.params;
+    const { batchId, teacherId, dueDate } = req.body;
+
+    if (!batchId || !teacherId || !dueDate) {
+      return res.status(400).json({ message: "batchId, teacherId, and dueDate are required" });
+    }
+
+    const templateLecture = await Lecture.findById(topicId);
+    if (!templateLecture) {
+      return res.status(404).json({ message: "Template lecture not found" });
+    }
+
+    // Find if a BatchLecture copy already exists for this batch
+    let batchLecture = await BatchLecture.findOne({
+      batch: batchId,
+      templateLecture: topicId,
+    });
+
+    if (batchLecture) {
+      batchLecture.assignedTo = teacherId;
+      batchLecture.dueDate = new Date(dueDate);
+      await batchLecture.save();
+    } else {
+      // Create a new BatchLecture copy
+      batchLecture = await BatchLecture.create({
+        batch: batchId,
+        syllabus: templateLecture.syllabus,
+        templateLecture: topicId,
+        title: templateLecture.title,
+        description: templateLecture.description,
+        chapterId: templateLecture.chapterId,
+        duration: templateLecture.duration,
+        lectureType: templateLecture.lectureType,
+        order: templateLecture.order,
+        assignedTo: teacherId,
+        dueDate: new Date(dueDate),
+        completionStatus: "Pending",
+        subLectures: templateLecture.subLectures.map(sl => ({
+          title: sl.title,
+          duration: sl.duration,
+          order: sl.order,
+          completionStatus: "Pending"
+        }))
+      });
+    }
+
+    // Also update templateLecture's dueDate and assignedTo so that the card displays scheduled info
+    templateLecture.dueDate = new Date(dueDate);
+    templateLecture.assignedTo = teacherId;
+    await templateLecture.save();
+
+    res.json({
+      message: "Lecture scheduled successfully",
+      lecture: batchLecture,
+    });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+};

@@ -22,7 +22,8 @@ import {
   getTeacherLectures,
   updateLectureStatus,
   addLectureRemark,
-  getSubjectProgress
+  getSubjectProgress,
+  scheduleLecture
 } from "../controllers/lecture.controller.js";
 import {
   verifyToken,
@@ -55,6 +56,7 @@ router.get("/assigned-syllabi", verifyToken, isTeacher, getAssignedSyllabiForTea
 router.post("/topic", verifyToken, isAdminOrTeacher, createLecture);
 router.put("/topic/:topicId", verifyToken, isAdminOrTeacher, updateLecture);
 router.delete("/topic/:topicId", verifyToken, isAdminOrTeacher, deleteLecture);
+router.patch("/topic/:topicId/schedule", verifyToken, isAdmin, scheduleLecture);
 router.post("/assign-teacher", verifyToken, isAdmin, assignTeacherToBatchLecture);
 router.patch("/assign-topic", verifyToken, isAdmin, assignTeacherToBatchLecture);
 router.get("/batch-topics", verifyToken, getBatchLectures);

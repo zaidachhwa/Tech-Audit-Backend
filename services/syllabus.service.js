@@ -12,6 +12,7 @@ export const updateSyllabusService = async (id, data) => {
     .populate("lectures")
     .populate("topics")
     .populate("assignedTeacher", "name email phone")
+    .populate("assignedTeachers", "name email phone")
     .populate("createdBy", "name email");
 };
 

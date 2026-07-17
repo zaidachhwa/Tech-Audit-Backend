@@ -19,6 +19,7 @@ const batchLectureSchema = new mongoose.Schema(
     },
     title: { type: String, required: true },
     description: { type: String, default: "" },
+    dueDate: { type: Date },
     chapterId: { type: String, default: "" },
     duration: { type: Number, default: 0 },
     lectureType: {

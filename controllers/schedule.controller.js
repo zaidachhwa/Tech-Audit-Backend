@@ -4,6 +4,8 @@ import { Teacher } from "../models/teacher.model.js";
 import Batch from "../models/batch.model.js";
 import { Submission } from "../models/submission.model.js";
 import { Announcement } from "../models/announcement.model.js";
+import { BatchLecture } from "../models/batchLecture.model.js";
+import { Lecture } from "../models/lecture.model.js";
 
 /**
  * Create a new Lecture Schedule
@@ -125,7 +127,73 @@ export const listSchedules = async (req, res) => {
       .sort({ createdAt: -1 })
       .lean();
 
-    return res.status(200).json(schedules);
+    // Query BatchLectures that are scheduled (have dueDate set)
+    let batchLecturesQuery = {
+      dueDate: { $exists: true, $ne: null }
+    };
+
+    let studentBatchResolved = null;
+    if (role === "teacher") {
+      batchLecturesQuery.assignedTo = userId;
+    } else if (role === "student") {
+      const student = await Student.findById(userId).lean();
+      if (student) {
+        const studentBatch = await Batch.findOne({
+          batch_name: student.batch_name,
+          batch_no: student.batch_no
+        }).lean();
+        if (studentBatch) {
+          studentBatchResolved = studentBatch;
+          batchLecturesQuery.batch = studentBatch._id;
+        } else {
+          return res.status(200).json(schedules);
+        }
+      }
+    }
+
+    const scheduledBatchLectures = await BatchLecture.find(batchLecturesQuery)
+      .populate("batch", "batch_name batch_no")
+      .populate("syllabus", "subject name")
+      .populate("assignedTo", "name email")
+      .lean();
+
+    // Group scheduledBatchLectures by batch._id and syllabus._id
+    const groups = {};
+    for (const bl of scheduledBatchLectures) {
+      if (!bl.batch || !bl.syllabus) continue;
+      const batchId = bl.batch._id.toString();
+      const syllabusId = bl.syllabus._id.toString();
+      const key = `${batchId}_${syllabusId}`;
+
+      if (!groups[key]) {
+        groups[key] = {
+          _id: `batch_syllabus_${key}`,
+          subject: bl.syllabus.subject || bl.syllabus.name || "Syllabus Lecture",
+          batch: bl.batch,
+          teacher: bl.assignedTo || { name: "Unassigned", email: "" },
+          lectures: [],
+          verificationStatus: "approved",
+          createdByRole: "admin",
+          isFromSyllabusTracker: true
+        };
+      }
+
+      groups[key].lectures.push({
+        _id: bl._id,
+        title: bl.title,
+        description: bl.description,
+        date: bl.dueDate,
+        teacher: bl.assignedTo,
+        status: bl.completionStatus === "Completed" ? "Done" : (bl.completionStatus === "In Progress" ? "Scheduled" : "Planned"),
+        homework: null,
+        isSaturdayLecture: false
+      });
+    }
+
+    const batchSyllabusSchedules = Object.values(groups);
+    const allSchedules = [...schedules, ...batchSyllabusSchedules];
+
+    return res.status(200).json(allSchedules);
   } catch (err) {
     return res.status(500).json({ message: err.message });
   }
@@ -138,7 +206,59 @@ export const listSchedules = async (req, res) => {
 export const getScheduleById = async (req, res) => {
   try {
     const { id: userId, role } = req.user;
-    const schedule = await Schedule.findById(req.params.id)
+    const { id } = req.params;
+
+    if (id.startsWith("batch_syllabus_")) {
+      const parts = id.replace("batch_syllabus_", "").split("_");
+      const batchId = parts[0];
+      const syllabusId = parts[1];
+
+      let query = {
+        batch: batchId,
+        syllabus: syllabusId,
+        dueDate: { $exists: true, $ne: null }
+      };
+
+      if (role === "teacher") {
+        query.assignedTo = userId;
+      }
+
+      const bls = await BatchLecture.find(query)
+        .populate("batch", "batch_name batch_no")
+        .populate("syllabus", "subject name")
+        .populate("assignedTo", "name email")
+        .sort({ order: 1, dueDate: 1 })
+        .lean();
+
+      if (bls.length === 0) {
+        return res.status(404).json({ message: "Schedule not found" });
+      }
+
+      const firstLec = bls[0];
+      const virtualSchedule = {
+        _id: id,
+        subject: firstLec.syllabus?.subject || firstLec.syllabus?.name || "Syllabus Lectures",
+        batch: firstLec.batch,
+        teacher: firstLec.assignedTo || { name: "Unassigned", email: "" },
+        lectures: bls.map(bl => ({
+          _id: bl._id,
+          title: bl.title,
+          description: bl.description,
+          date: bl.dueDate,
+          teacher: bl.assignedTo,
+          status: bl.completionStatus === "Completed" ? "Done" : (bl.completionStatus === "In Progress" ? "Scheduled" : "Planned"),
+          homework: null,
+          isSaturdayLecture: false
+        })),
+        verificationStatus: "approved",
+        createdByRole: "admin",
+        isFromSyllabusTracker: true
+      };
+
+      return res.status(200).json(virtualSchedule);
+    }
+
+    const schedule = await Schedule.findById(id)
       .populate("batch", "batch_name batch_no")
       .populate("teacher", "name email")
       .populate("lectures.teacher", "name email");
@@ -173,6 +293,55 @@ export const getScheduleById = async (req, res) => {
     }
 
     return res.status(200).json(schedule);
+  } catch (err) {
+    return res.status(500).json({ message: err.message });
+  }
+};
+
+/**
+ * Update single BatchLecture properties from Scheduler Grid
+ */
+export const updateBatchLectureFromScheduler = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { date, teacherId, status } = req.body;
+
+    const batchLecture = await BatchLecture.findById(id);
+    if (!batchLecture) {
+      return res.status(404).json({ message: "Lecture not found" });
+    }
+
+    if (date) {
+      batchLecture.dueDate = new Date(date);
+    }
+    if (teacherId !== undefined) {
+      batchLecture.assignedTo = teacherId || null;
+    }
+    if (status) {
+      const statusMap = {
+        "Done": "Completed",
+        "Scheduled": "In Progress",
+        "Planned": "Pending"
+      };
+      batchLecture.completionStatus = statusMap[status] || status;
+      if (batchLecture.completionStatus === "Completed") {
+        batchLecture.completedAt = new Date();
+      }
+    }
+
+    await batchLecture.save();
+
+    // Sync back to template Lecture if exists
+    if (batchLecture.templateLecture) {
+      const template = await Lecture.findById(batchLecture.templateLecture);
+      if (template) {
+        if (date) template.dueDate = new Date(date);
+        if (teacherId !== undefined) template.assignedTo = teacherId || null;
+        await template.save();
+      }
+    }
+
+    return res.status(200).json({ message: "Lecture updated successfully", lecture: batchLecture });
   } catch (err) {
     return res.status(500).json({ message: err.message });
   }

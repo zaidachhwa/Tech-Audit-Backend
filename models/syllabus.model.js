@@ -15,6 +15,10 @@ const syllabusSchema = new mongoose.Schema(
       ref: "Teacher",
       default: null,
     },
+    assignedTeachers: [{
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Teacher",
+    }],
 
     createdBy: {
       type: mongoose.Schema.Types.ObjectId,

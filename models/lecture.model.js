@@ -20,6 +20,7 @@ const lectureSchema = new mongoose.Schema(
     },
     title: { type: String, required: true }, // Lecture Name
     description: { type: String, default: "" },
+    dueDate: { type: Date },
     chapterId: { type: String, default: "" },
     duration: { type: Number, default: 0 }, // Lecture duration in minutes
     lectureType: {
