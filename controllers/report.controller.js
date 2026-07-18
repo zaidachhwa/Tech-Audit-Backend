@@ -917,7 +917,7 @@ export const generateReportPreviewPdf = async (req, res) => {
 
     let grandObtained2 = 0;
     let grandTotal2 = 0;
-    report.parameters.forEach(p => {
+    parameters.forEach(p => {
       if (p.name && p.name.trim()) {
         grandObtained2 += Number(p.score) || 0;
         grandTotal2 += Number(p.totalScore) || 10;

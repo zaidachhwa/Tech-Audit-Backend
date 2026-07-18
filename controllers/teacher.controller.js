@@ -267,7 +267,7 @@ export const changeTeacherPassword = async (req, res) => {
 
     const isMatch = await bcrypt.compare(currentPassword, teacher.password);
     if (!isMatch) {
-      return res.status(400).json({ message: "Current password is incorrect" });
+      return res.status(400).json({ message: "Wrong old password." });
     }
 
     const hashed = await bcrypt.hash(newPassword, 10);

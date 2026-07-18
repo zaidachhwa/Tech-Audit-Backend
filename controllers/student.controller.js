@@ -9,6 +9,7 @@ import Homework from "../models/homework.model.js";
 import { Attendance } from "../models/attendance.model.js";
 import { ActivityLog } from "../models/activityLog.model.js";
 import { sendStudentCredentials, generateRandomPassword } from "../utils/email.js";
+import { getTeacherBatchIds } from "../utils/teacherScope.js";
 
 const JWT_SECRET = process.env.JWT_SECRET;
 
@@ -372,19 +373,7 @@ export const getAllStudents = async (req, res) => {
 
     // 🔒 RESTRICT TEACHERS TO THEIR ASSIGNED BATCHES
     if (req.user && req.user.role === "teacher") {
-      const Schedule = mongoose.model("Schedule");
-      const BatchLecture = mongoose.model("BatchLecture");
-      const Batch = mongoose.model("Batch");
-
-      const teacherSchedules = await Schedule.find({ teacher: req.user.id }).select("batch").lean();
-      const scheduleBatchIds = teacherSchedules.map(s => s.batch);
-
-      const teacherLectures = await BatchLecture.find({
-        $or: [{ assignedTo: req.user.id }, { teacherIds: req.user.id }]
-      }).select("batch").lean();
-      const lectureBatchIds = teacherLectures.map(l => l.batch);
-
-      const allBatchIds = [...new Set([...scheduleBatchIds.map(id => id.toString()), ...lectureBatchIds.map(id => id.toString())])];
+      const allBatchIds = await getTeacherBatchIds(req.user.id);
       const teacherBatches = await Batch.find({ _id: { $in: allBatchIds } }).lean();
 
       if (teacherBatches.length > 0) {
@@ -585,7 +574,7 @@ export const updateMe = async (req, res) => {
       if (!ok)
         return res
           .status(400)
-          .json({ message: "Wrong Password" });
+          .json({ message: "Wrong old password." });
 
       student.password = await bcrypt.hash(newPassword, 10);
     }

@@ -229,6 +229,29 @@ export const assignTeacherToSyllabus = async (req, res) => {
       }
     );
 
+    // Sync Teacher.subjects: add this subject to every newly-assigned teacher,
+    // dedup automatically via $addToSet, and drop it from teachers who lost
+    // this assignment (only if they have no other syllabus assigning the same subject).
+    const previousTeacherIds = (syllabus.assignedTeachers || []).map((id) => id.toString());
+    const newTeacherIdsStr = finalTeacherIds.map((id) => id.toString());
+    const removedTeacherIds = previousTeacherIds.filter((id) => !newTeacherIdsStr.includes(id));
+
+    await Teacher.updateMany(
+      { _id: { $in: finalTeacherIds } },
+      { $addToSet: { subjects: syllabus.subject } }
+    );
+
+    for (const tId of removedTeacherIds) {
+      const stillAssignedElsewhere = await Syllabus.exists({
+        subject: syllabus.subject,
+        assignedTeachers: tId,
+        _id: { $ne: syllabusId },
+      });
+      if (!stillAssignedElsewhere) {
+        await Teacher.updateOne({ _id: tId }, { $pull: { subjects: syllabus.subject } });
+      }
+    }
+
     // Update syllabus assigned teachers
     const updatedSyllabus = await Syllabus.findByIdAndUpdate(
       syllabusId,
@@ -281,6 +304,14 @@ export const unassignTeacherFromSyllabus = async (req, res) => {
       );
     }
     await syllabus.save();
+
+    const stillAssignedElsewhere = await Syllabus.exists({
+      subject: syllabus.subject,
+      assignedTeachers: teacherId,
+    });
+    if (!stillAssignedElsewhere) {
+      await Teacher.updateOne({ _id: teacherId }, { $pull: { subjects: syllabus.subject } });
+    }
 
     await Lecture.updateMany(
       { syllabus: syllabusId, assignedTo: teacherId },
