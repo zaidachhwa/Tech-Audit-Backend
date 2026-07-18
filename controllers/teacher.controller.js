@@ -3,6 +3,7 @@ import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import { Teacher } from "../models/teacher.model.js";
 import { BatchLecture } from "../models/batchLecture.model.js";
+import { Syllabus } from "../models/syllabus.model.js";
 
 
 /* =====================================
@@ -125,6 +126,42 @@ export const rejectTeacher = async (req, res) => {
 ===================================== */
 export const getAllTeachers = async (req, res) => {
   try {
+    // Auto-sync each teacher's subjects from current Syllabus assignments
+    // so the Teachers page always reflects what was assigned on the Syllabus page.
+    const allSyllabi = await Syllabus.find().select("subject assignedTeachers");
+
+    // Build a map: teacherId -> Set of subjects assigned to them
+    const teacherSubjectsMap = {};
+    for (const syl of allSyllabi) {
+      if (!syl.subject || !syl.assignedTeachers?.length) continue;
+      for (const tId of syl.assignedTeachers) {
+        const key = tId.toString();
+        if (!teacherSubjectsMap[key]) teacherSubjectsMap[key] = new Set();
+        teacherSubjectsMap[key].add(syl.subject);
+      }
+    }
+
+    // Update each teacher's subjects field to match what's in Syllabus collection
+    const bulkOps = Object.entries(teacherSubjectsMap).map(([tId, subjects]) => ({
+      updateOne: {
+        filter: { _id: tId },
+        update: { $set: { subjects: [...subjects] } }
+      }
+    }));
+
+    // Also clear subjects for teachers who have no syllabi assigned
+    const assignedTeacherIds = Object.keys(teacherSubjectsMap);
+    bulkOps.push({
+      updateMany: {
+        filter: { _id: { $nin: assignedTeacherIds } },
+        update: { $set: { subjects: [] } }
+      }
+    });
+
+    if (bulkOps.length > 0) {
+      await Teacher.bulkWrite(bulkOps);
+    }
+
     const teachers = await Teacher.find().select("-password").sort({ createdAt: -1 });
     res.json({ teachers });
   } catch (err) {
@@ -287,33 +324,51 @@ export const changeTeacherPassword = async (req, res) => {
 export const getTeacherStats = async (req, res) => {
   try {
     const teacherId = req.user.id;
+    const { getTeacherAllocatedBatchIds } = await import("./batch.controller.js");
 
-    /**
-     * IMPORTANT:
-     * You must replace these models WITH your actual DB models.
-     * I'm creating placeholders so your controller logic stays same.
-     */
+    const BatchLecture = (await import("../models/batchLecture.model.js")).BatchLecture;
+    const Batch = (await import("../models/batch.model.js")).default;
+    const Student = (await import("../models/student.model.js")).Student;
 
-    const BatchLecture = mongoose.model("BatchLecture");
-    const Batch = mongoose.model("Batch");
-    const Student = mongoose.model("Student");
+    const allocatedBatchIds = await getTeacherAllocatedBatchIds(teacherId);
 
-    const totalTopics = await BatchLecture.countDocuments({ assignedTo: teacherId });
+    const allocatedBatches = await Batch.find({
+      _id: { $in: allocatedBatchIds },
+    }).lean();
+
+    const studentIds = new Set();
+    allocatedBatches.forEach((b) => {
+      (b.students || []).forEach((sId) => studentIds.add(sId.toString()));
+    });
+
+    for (const b of allocatedBatches) {
+      if (b.batch_name && b.batch_no) {
+        const sList = await Student.find({
+          batch_name: b.batch_name,
+          batch_no: b.batch_no,
+        })
+          .select("_id")
+          .lean();
+        sList.forEach((s) => studentIds.add(s._id.toString()));
+      }
+    }
+
+    const topicQuery = {
+      $or: [
+        { assignedTo: teacherId },
+        { teacherIds: teacherId },
+        { batch: { $in: allocatedBatchIds } },
+      ],
+    };
+
+    const totalTopics = await BatchLecture.countDocuments(topicQuery);
     const completedTopics = await BatchLecture.countDocuments({
-      assignedTo: teacherId,
+      ...topicQuery,
       completionStatus: "Completed",
     });
     const inProgressTopics = await BatchLecture.countDocuments({
-      assignedTo: teacherId,
+      ...topicQuery,
       completionStatus: "In Progress",
-    });
-
-    const assignedBatches = await Batch.find({ teacher: teacherId }).select(
-      "_id"
-    );
-
-    const totalStudents = await Student.countDocuments({
-      batchId: { $in: assignedBatches.map((b) => b._id) },
     });
 
     const completionRate =
@@ -323,11 +378,12 @@ export const getTeacherStats = async (req, res) => {
       totalTopics,
       completedTopics,
       inProgressTopics,
-      totalBatches: assignedBatches.length,
-      totalStudents,
+      totalBatches: allocatedBatchIds.length,
+      totalStudents: studentIds.size,
       completionRate,
     });
   } catch (err) {
+    console.error("getTeacherStats error:", err);
     res.status(500).json({ message: err.message });
   }
 };

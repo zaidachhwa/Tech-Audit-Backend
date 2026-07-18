@@ -109,6 +109,34 @@ export const createProject = async (req, res) => {
   }
 };
 
+/* Get all projects (filtered by teacher allocated batches if role === 'teacher') */
+export const getAllProjects = async (req, res) => {
+  try {
+    let query = {};
+    if (req.user && req.user.role === "teacher") {
+      const { getTeacherAllocatedBatchIds } = await import("./batch.controller.js");
+      const allocatedBatchIds = await getTeacherAllocatedBatchIds(req.user.id);
+      query = {
+        $or: [
+          { createdBy: req.user.id },
+          { batch: { $in: allocatedBatchIds } },
+        ],
+      };
+    }
+
+    const projects = await Project.find(query)
+      .populate("assignedTo", "name email")
+      .populate("batch", "batch_name batch_no")
+      .populate("createdBy", "name email")
+      .sort({ createdAt: -1 })
+      .lean();
+
+    return res.status(200).json({ count: projects.length, projects });
+  } catch (err) {
+    return res.status(500).json({ message: err.message });
+  }
+};
+
 /* Get projects by batch */
 export const getProjectsByBatch = async (req, res) => {
   try {

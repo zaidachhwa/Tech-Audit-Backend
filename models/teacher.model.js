@@ -20,6 +20,8 @@ const teacherSchema = new mongoose.Schema(
     },
 
     subjects: [{ type: String }],
+    location: { type: String, default: "" },
+    bio: { type: String, default: "" },
 
     role: { type: String, default: "teacher" },
     isActive: { type: Boolean, default: false },

@@ -40,7 +40,21 @@ export const createSyllabus = async (req, res) => {
  */
 export const getAllSyllabi = async (req, res) => {
   try {
-    const syllabi = await Syllabus.find()
+    let query = {};
+    if (req.user && req.user.role === "teacher") {
+      const Teacher = (await import("../models/teacher.model.js")).Teacher;
+      const teacher = await Teacher.findById(req.user.id).lean();
+      const teacherSubjects = teacher?.subjects || [];
+      query = {
+        $or: [
+          { assignedTeacher: req.user.id },
+          { assignedTeachers: req.user.id },
+          { subject: { $in: teacherSubjects } },
+        ],
+      };
+    }
+
+    const syllabi = await Syllabus.find(query)
       .populate({
         path: "lectures",
         populate: [
@@ -415,6 +429,22 @@ export const getBatchesWithSyllabi = async (req, res) => {
 export const getAssignedSyllabiForTeacher = async (req, res) => {
   try {
     const { batchId } = req.query;
+    const teacherId = req.user.id;
+
+    // 1. Get teacher's details & subjects
+    const teacher = await Teacher.findById(teacherId).lean();
+    const teacherSubjects = teacher?.subjects || [];
+
+    // 2. Find all syllabi assigned to this teacher
+    const assignedSyllabiList = await Syllabus.find({
+      $or: [
+        { assignedTeacher: teacherId },
+        { assignedTeachers: teacherId },
+        { subject: { $in: teacherSubjects } },
+      ],
+    }).lean();
+
+    const teacherSyllabusIds = assignedSyllabiList.map((s) => s._id);
 
     if (batchId) {
       const batch = await Batch.findById(batchId).select(
@@ -422,7 +452,10 @@ export const getAssignedSyllabiForTeacher = async (req, res) => {
       );
       if (!batch) return res.status(404).json({ message: "Batch not found" });
 
-      const assignedSyllabi = await BatchSyllabus.find({ batch: batchId })
+      const assignedSyllabi = await BatchSyllabus.find({
+        batch: batchId,
+        syllabus: { $in: teacherSyllabusIds },
+      })
         .populate("syllabus", "subject description lectures topics")
         .populate("assignedBy", "name email")
         .sort({ createdAt: -1 });
@@ -430,11 +463,25 @@ export const getAssignedSyllabiForTeacher = async (req, res) => {
       return res.json({ batch: batch.toObject(), assignedSyllabi });
     }
 
-    const batches = await Batch.find().select("batch_name batch_no students");
+    // 3. Find only batches that have syllabi assigned to this teacher
+    const teacherBatchSyllabi = await BatchSyllabus.find({
+      syllabus: { $in: teacherSyllabusIds },
+    }).lean();
+
+    const teacherBatchIds = [
+      ...new Set(teacherBatchSyllabi.map((bs) => bs.batch.toString())),
+    ];
+
+    const batches = await Batch.find({ _id: { $in: teacherBatchIds } }).select(
+      "batch_name batch_no students"
+    );
 
     const batchesWithSyllabi = await Promise.all(
       batches.map(async (b) => {
-        const assignedSyllabi = await BatchSyllabus.find({ batch: b._id })
+        const assignedSyllabi = await BatchSyllabus.find({
+          batch: b._id,
+          syllabus: { $in: teacherSyllabusIds },
+        })
           .populate("syllabus", "subject description lectures topics")
           .populate("assignedBy", "name email")
           .sort({ createdAt: -1 });

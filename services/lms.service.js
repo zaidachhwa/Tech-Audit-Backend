@@ -55,16 +55,37 @@ export const getAllLmsService = async ({ page = 1, limit = 20 }) => {
   return { total, page, limit, items };
 };
 
+// ─── Helper: Get all batch IDs for a student ─────────────────────────────────
+export const getStudentBatchIds = async (studentId) => {
+  const batchIds = new Set();
+
+  // 1. StudentBatchMapping
+  const mappings = await StudentBatchMapping.find({ student: studentId }).lean();
+  mappings.forEach((m) => m.batch && batchIds.add(m.batch.toString()));
+
+  // 2. Direct Batch.students array
+  const directBatches = await Batch.find({ students: studentId }).lean();
+  directBatches.forEach((b) => batchIds.add(b._id.toString()));
+
+  // 3. Match by student's batch_name and batch_no
+  const student = await Student.findById(studentId).lean();
+  if (student && student.batch_name && student.batch_no) {
+    const nameBatches = await Batch.find({
+      batch_name: student.batch_name,
+      batch_no: student.batch_no,
+    }).lean();
+    nameBatches.forEach((b) => batchIds.add(b._id.toString()));
+  }
+
+  return Array.from(batchIds);
+};
+
 // ─── Get LMS resources visible to a specific student ─────────────────────────
 export const getLmsForStudentService = async ({ studentId, page = 1, limit = 20 }) => {
   const skip = (page - 1) * limit;
 
-  // Find all batches this student belongs to
-  const mappings = await StudentBatchMapping.find({ student: studentId }).lean();
-  const studentBatchIds = mappings.map((m) => m.batch.toString());
+  const studentBatchIds = await getStudentBatchIds(studentId);
 
-  // Also check the student's own batch_name / batch_no in case they're stored there
-  // We query: visibility === "all"  OR  visibility === "specific" and batch overlaps
   const query = {
     $or: [
       { visibility: "all" },

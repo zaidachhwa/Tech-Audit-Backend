@@ -514,13 +514,36 @@ export const getBatchLectures = async (req, res) => {
       return res.status(400).json({ message: "batchId and syllabusId required" });
     }
 
-    const filter = { batch: batchId, syllabus: syllabusId };
+    if (req.user && req.user.role === "teacher") {
+      const Teacher = (await import("../models/teacher.model.js")).Teacher;
+      const { Syllabus } = await import("../models/syllabus.model.js");
 
-    if (req.user.role === "teacher") {
-      filter.assignedTo = req.user.id;
+      const teacher = await Teacher.findById(req.user.id).lean();
+      const teacherSubjects = teacher?.subjects || [];
+
+      const syllabusDoc = await Syllabus.findById(syllabusId).lean();
+      if (syllabusDoc) {
+        const isAssigned =
+          syllabusDoc.assignedTeacher?.toString() === req.user.id ||
+          (syllabusDoc.assignedTeachers || []).some(
+            (tId) => tId.toString() === req.user.id
+          ) ||
+          teacherSubjects.includes(syllabusDoc.subject);
+
+        if (!isAssigned) {
+          const assignedLecture = await BatchLecture.findOne({
+            batch: batchId,
+            syllabus: syllabusId,
+            $or: [{ assignedTo: req.user.id }, { teacherIds: req.user.id }],
+          });
+          if (!assignedLecture) {
+            return res.status(403).json({ message: "Access denied to this syllabus" });
+          }
+        }
+      }
     }
 
-    const lectures = await BatchLecture.find(filter)
+    const lectures = await BatchLecture.find({ batch: batchId, syllabus: syllabusId })
       .populate("assignedTo", "name email")
       .populate("templateLecture", "title description")
       .sort({ order: 1, createdAt: 1 });
@@ -560,7 +583,7 @@ export const getTeacherLectures = async (req, res) => {
 
 export const updateLectureStatus = async (req, res) => {
   try {
-    const { lectureId } = req.params;
+    const id = req.params.topicId || req.params.lectureId || req.params.id;
     const { status, subLectures } = req.body;
 
     const validStatuses = ["Pending", "In Progress", "Completed"];
@@ -568,9 +591,9 @@ export const updateLectureStatus = async (req, res) => {
       return res.status(400).json({ message: "Invalid status" });
     }
 
-    const batchLecture = await BatchLecture.findById(lectureId);
+    const batchLecture = await BatchLecture.findById(id);
     if (!batchLecture) {
-      return res.status(404).json({ message: "Lecture not found" });
+      return res.status(404).json({ message: "Lecture/Topic not found" });
     }
 
     if (
@@ -601,12 +624,12 @@ export const updateLectureStatus = async (req, res) => {
 
 export const addLectureRemark = async (req, res) => {
   try {
-    const { lectureId } = req.params;
+    const id = req.params.topicId || req.params.lectureId || req.params.id;
     const { remark } = req.body;
 
-    const batchLecture = await BatchLecture.findById(lectureId);
+    const batchLecture = await BatchLecture.findById(id);
     if (!batchLecture) {
-      return res.status(404).json({ message: "Lecture not found" });
+      return res.status(404).json({ message: "Lecture/Topic not found" });
     }
 
     if (

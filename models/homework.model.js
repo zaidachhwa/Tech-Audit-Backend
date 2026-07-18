@@ -10,6 +10,8 @@ const homeworkSubmissionSchema = new mongoose.Schema({
     enum: ["assigned", "pending_review", "approved", "rejected"],
     default: "pending_review"
   },
+  marks: { type: Number },
+  outOf: { type: Number },
   remarks: { type: String, default: "" },
   reviewedBy: { type: mongoose.Schema.Types.ObjectId, ref: "Teacher" },
   reviewedAt: { type: Date }

@@ -163,9 +163,7 @@ export const getLmsResourceById = async (req, res) => {
     // Students: only return if they have access
     if (req.user.role === "student") {
       if (lms.visibility === "specific") {
-        const { StudentBatchMapping } = await import("../models/studentBatchMapping.model.js");
-        const mappings = await StudentBatchMapping.find({ student: req.user.id }).lean();
-        const studentBatchIds = mappings.map((m) => m.batch.toString());
+        const studentBatchIds = await lmsService.getStudentBatchIds(req.user.id);
         const batchIds = lms.batches.map((b) => b._id.toString());
         const hasAccess = batchIds.some((id) => studentBatchIds.includes(id));
         if (!hasAccess) {

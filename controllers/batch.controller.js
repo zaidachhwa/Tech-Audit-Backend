@@ -1,12 +1,71 @@
 import * as batchService from "../services/batch.service.js";
+import jwt from "jsonwebtoken";
 
-// ✅ PUBLIC: Get all batches (used currently)
+// ─── Helper: Get Batch IDs allocated to a specific Teacher ───────────────────
+export const getTeacherAllocatedBatchIds = async (teacherId) => {
+  const Teacher = (await import("../models/teacher.model.js")).Teacher;
+  const { Syllabus } = await import("../models/syllabus.model.js");
+  const { BatchSyllabus } = await import("../models/batchSyllabus.model.js");
+  const { BatchLecture } = await import("../models/batchLecture.model.js");
+
+  const teacher = await Teacher.findById(teacherId).lean();
+  if (!teacher) return [];
+
+  const batchIds = new Set();
+
+  // 1. Syllabi assigned to teacher
+  const syllabi = await Syllabus.find({
+    $or: [
+      { assignedTeacher: teacherId },
+      { assignedTeachers: teacherId },
+      { subject: { $in: teacher.subjects || [] } },
+    ],
+  }).lean();
+
+  const syllabusIds = syllabi.map((s) => s._id);
+
+  const batchSyllabi = await BatchSyllabus.find({
+    syllabus: { $in: syllabusIds },
+  }).lean();
+
+  batchSyllabi.forEach((bs) => bs.batch && batchIds.add(bs.batch.toString()));
+
+  // 2. BatchLectures assigned to teacher
+  const batchLectures = await BatchLecture.find({
+    $or: [{ assignedTo: teacherId }, { teacherIds: teacherId }],
+  }).lean();
+
+  batchLectures.forEach((bl) => bl.batch && batchIds.add(bl.batch.toString()));
+
+  return Array.from(batchIds);
+};
+
+// ✅ PUBLIC: Get all batches (used currently, filtered if called by a Teacher)
 export const getPublicBatches = async (req, res) => {
   try {
-    const batches = await (await import("../models/batch.model.js")).default
-      .find({}, "batch_name batch_no")
-      .lean();
+    const authHeader = req.headers.authorization;
+    let teacherId = null;
+    if (authHeader && authHeader.startsWith("Bearer ")) {
+      try {
+        const token = authHeader.split(" ")[1];
+        const decoded = jwt.verify(token, process.env.JWT_SECRET);
+        if (decoded && decoded.role === "teacher") {
+          teacherId = decoded.id;
+        }
+      } catch (e) {
+        // Token invalid, fall back to default public behavior
+      }
+    }
 
+    const Batch = (await import("../models/batch.model.js")).default;
+    let query = {};
+
+    if (teacherId) {
+      const allocatedBatchIds = await getTeacherAllocatedBatchIds(teacherId);
+      query = { _id: { $in: allocatedBatchIds } };
+    }
+
+    const batches = await Batch.find(query, "batch_name batch_no").lean();
     return res.status(200).json(batches);
   } catch (err) {
     return res.status(500).json({ message: err.message });
@@ -17,9 +76,14 @@ export const getPublicBatches = async (req, res) => {
 export const getUniqueBatchNames = async (req, res) => {
   try {
     const Batch = (await import("../models/batch.model.js")).default;
+    let query = {};
 
-    const names = await Batch.distinct("batch_name");
+    if (req.user && req.user.role === "teacher") {
+      const allocatedBatchIds = await getTeacherAllocatedBatchIds(req.user.id);
+      query = { _id: { $in: allocatedBatchIds } };
+    }
 
+    const names = await Batch.distinct("batch_name", query);
     return res.status(200).json(names);
   } catch (err) {
     return res.status(500).json({ message: err.message });
@@ -36,9 +100,14 @@ export const getBatchNumbersByName = async (req, res) => {
     }
 
     const Batch = (await import("../models/batch.model.js")).default;
+    let query = { batch_name };
 
-    const numbers = await Batch.distinct("batch_no", { batch_name });
+    if (req.user && req.user.role === "teacher") {
+      const allocatedBatchIds = await getTeacherAllocatedBatchIds(req.user.id);
+      query._id = { $in: allocatedBatchIds };
+    }
 
+    const numbers = await Batch.distinct("batch_no", query);
     return res.status(200).json(numbers);
   } catch (err) {
     return res.status(500).json({ message: err.message });
@@ -73,6 +142,18 @@ export const createBatch = async (req, res) => {
 export const getAllBatches = async (req, res) => {
   try {
     const { page = 1, limit = 20 } = req.query;
+
+    if (req.user && req.user.role === "teacher") {
+      const allocatedBatchIds = await getTeacherAllocatedBatchIds(req.user.id);
+      const Batch = (await import("../models/batch.model.js")).default;
+      const total = allocatedBatchIds.length;
+      const batches = await Batch.find({ _id: { $in: allocatedBatchIds } })
+        .skip((Number(page) - 1) * Number(limit))
+        .limit(Number(limit))
+        .lean();
+
+      return res.status(200).json({ total, page: Number(page), limit: Number(limit), batches });
+    }
 
     const data = await batchService.getBatchesService({
       page: Number(page),

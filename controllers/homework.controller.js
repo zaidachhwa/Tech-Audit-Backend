@@ -334,7 +334,7 @@ export const getPendingHomework = async (req, res) => {
 export const approveHomework = async (req, res) => {
   try {
     const { submissionId } = req.params;
-    const { remarks } = req.body;
+    const { remarks, marks, outOf } = req.body;
 
     const homework = await Homework.findOne({ "submissions._id": submissionId });
     if (!homework) {
@@ -345,6 +345,8 @@ export const approveHomework = async (req, res) => {
     if (sub) {
       sub.status = "approved";
       sub.remarks = remarks || "";
+      sub.marks = marks;
+      sub.outOf = outOf;
       sub.reviewedBy = req.user.id;
       sub.reviewedAt = new Date();
     }

@@ -2,6 +2,7 @@ import express from "express";
 import {
   assignProjectToBatch,
   createProject,
+  getAllProjects,
   getProjectsByBatch,
   getProjectsByStudent,
   getProjectById,
@@ -21,7 +22,8 @@ import {
 
 const router = express.Router();
 
-// ===== ADMIN ROUTES =====
+// ===== ADMIN / TEACHER ROUTES =====
+router.get("/", verifyToken, isAdminOrTeacher, getAllProjects);
 router.post("/assign-to-batch", verifyToken, isAdminOrTeacher, assignProjectToBatch);
 router.post("/create", verifyToken, isAdminOrTeacher, createProject);
 router.get("/batch/:batchId", verifyToken, isAdminOrTeacher, getProjectsByBatch);
