@@ -73,16 +73,48 @@ export const createProject = async (req, res) => {
       dueDate,
     } = req.body;
 
-    const targetStudent = assignedTo || studentId;
+    const finalDescription = description || title;
+    let targetStudent = assignedTo || studentId;
 
-    if (!title || !description || !batchId || !targetStudent)
-      return res.status(400).json({ message: "Required fields missing" });
+    if (!title || !batchId) {
+      return res.status(400).json({ message: "Title and batchId are required" });
+    }
+
+    if (!targetStudent) {
+      const batch = await Batch.findById(batchId).populate("students");
+      if (!batch || !batch.students || batch.students.length === 0) {
+        return res.status(400).json({ message: "No students found in batch to assign project" });
+      }
+      const createdProjects = [];
+      for (const st of batch.students) {
+        const sId = typeof st === "object" ? (st._id || st.id || st) : st;
+        const project = await Project.create({
+          title,
+          description: finalDescription,
+          batch: batchId,
+          assignedTo: sId,
+          modules,
+          createdBy: req.user?.id || req.body.createdBy,
+          creatorModel: req.user?.role === 'teacher' ? 'Teacher' : 'Admin',
+          outcomes,
+          skills,
+          repo,
+          overallStatus,
+          dueDate,
+        });
+        await Student.findByIdAndUpdate(sId, { $push: { projects: project._id } });
+        createdProjects.push(project);
+      }
+      return res.status(201).json({ message: "Projects created for batch", projects: createdProjects });
+    }
+
+    const finalStudentId = typeof targetStudent === "object" ? (targetStudent._id || targetStudent.id || targetStudent) : targetStudent;
 
     const project = await Project.create({
       title,
-      description,
+      description: finalDescription,
       batch: batchId,
-      assignedTo: targetStudent,
+      assignedTo: finalStudentId,
       modules,
       createdBy: req.user?.id || req.body.createdBy,
       creatorModel: req.user?.role === 'teacher' ? 'Teacher' : 'Admin',
@@ -94,7 +126,7 @@ export const createProject = async (req, res) => {
     });
 
     // push to student's projects array
-    await Student.findByIdAndUpdate(targetStudent, {
+    await Student.findByIdAndUpdate(finalStudentId, {
       $push: { projects: project._id },
     });
 

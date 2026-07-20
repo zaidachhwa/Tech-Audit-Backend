@@ -34,8 +34,8 @@ const batchLectureSchema = new mongoose.Schema(
     status: { type: String, default: "active" },
     completionStatus: {
       type: String,
-      enum: ["Pending", "In Progress", "Completed"],
-      default: "Pending",
+      enum: ["Yet to be scheduled", "Pending", "In Progress", "Completed"],
+      default: "Yet to be scheduled",
     },
     completedAt: { type: Date },
     remarks: { type: String, default: "" },
@@ -47,8 +47,8 @@ const batchLectureSchema = new mongoose.Schema(
         order: { type: Number, default: 0 },
         completionStatus: {
           type: String,
-          enum: ["Pending", "In Progress", "Completed"],
-          default: "Pending"
+          enum: ["Yet to be scheduled", "Pending", "In Progress", "Completed"],
+          default: "Yet to be scheduled"
         }
       }
     ],
@@ -63,8 +63,8 @@ const batchLectureSchema = new mongoose.Schema(
         studentId: { type: mongoose.Schema.Types.ObjectId, ref: "Student" },
         status: {
           type: String,
-          enum: ["Pending", "In Progress", "Completed"],
-          default: "Pending",
+          enum: ["Yet to be scheduled", "Pending", "In Progress", "Completed"],
+          default: "Yet to be scheduled",
         },
         remarks: { type: String, default: "" },
       },

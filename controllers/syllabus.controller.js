@@ -42,14 +42,10 @@ export const getAllSyllabi = async (req, res) => {
   try {
     let query = {};
     if (req.user && req.user.role === "teacher") {
-      const Teacher = (await import("../models/teacher.model.js")).Teacher;
-      const teacher = await Teacher.findById(req.user.id).lean();
-      const teacherSubjects = teacher?.subjects || [];
       query = {
         $or: [
           { assignedTeacher: req.user.id },
           { assignedTeachers: req.user.id },
-          { subject: { $in: teacherSubjects } },
         ],
       };
     }
@@ -204,12 +200,12 @@ export const assignSyllabusToBatch = async (req, res) => {
             duration: lecture.duration,
             lectureType: lecture.lectureType,
             order: lecture.order,
-            completionStatus: "Pending",
+            completionStatus: "Yet to be scheduled",
             subLectures: (lecture.subLectures || []).map(sl => ({
               title: sl.title,
               duration: sl.duration,
               order: sl.order,
-              completionStatus: "Pending"
+              completionStatus: "Yet to be scheduled"
             }))
           }));
           const createdBatchLectures = await BatchLecture.insertMany(batchLectureDocs);
@@ -345,7 +341,10 @@ export const unassignTeacherFromSyllabus = async (req, res) => {
 
     const stillAssignedElsewhere = await Syllabus.exists({
       subject: syllabus.subject,
-      assignedTeachers: teacherId,
+      $or: [
+        { assignedTeacher: teacherId },
+        { assignedTeachers: teacherId },
+      ],
     });
     if (!stillAssignedElsewhere) {
       await Teacher.updateOne({ _id: teacherId }, { $pull: { subjects: syllabus.subject } });
@@ -464,7 +463,6 @@ export const getAssignedSyllabiForTeacher = async (req, res) => {
       $or: [
         { assignedTeacher: teacherId },
         { assignedTeachers: teacherId },
-        { subject: { $in: teacherSubjects } },
       ],
     }).lean();
 

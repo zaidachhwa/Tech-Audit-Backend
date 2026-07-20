@@ -157,12 +157,33 @@ export const listSchedules = async (req, res) => {
       .populate("assignedTo", "name email")
       .lean();
 
-    // Group scheduledBatchLectures by batch._id and syllabus._id
+    // Build lookup set of existing lectures in Schedule documents to prevent double-display
+    const existingScheduleLectures = new Set();
+    schedules.forEach((sch) => {
+      const bId = sch.batch?._id ? sch.batch._id.toString() : (sch.batch ? sch.batch.toString() : "");
+      const subj = (sch.subject || "").trim().toLowerCase();
+      (sch.lectures || []).forEach((lec) => {
+        const title = (lec.title || "").trim().toLowerCase();
+        if (bId && subj && title) {
+          existingScheduleLectures.add(`${bId}_${subj}_${title}`);
+        }
+      });
+    });
+
+    // Group scheduledBatchLectures by batch._id and syllabus._id, excluding any already in Schedule
     const groups = {};
     for (const bl of scheduledBatchLectures) {
       if (!bl.batch || !bl.syllabus) continue;
       const batchId = bl.batch._id.toString();
       const syllabusId = bl.syllabus._id.toString();
+      const subj = (bl.syllabus.subject || bl.syllabus.name || "").trim().toLowerCase();
+      const title = (bl.title || "").trim().toLowerCase();
+
+      // Skip if this lecture was already returned via Schedule document
+      if (existingScheduleLectures.has(`${batchId}_${subj}_${title}`)) {
+        continue;
+      }
+
       const key = `${batchId}_${syllabusId}`;
 
       if (!groups[key]) {
@@ -190,7 +211,7 @@ export const listSchedules = async (req, res) => {
       });
     }
 
-    const batchSyllabusSchedules = Object.values(groups);
+    const batchSyllabusSchedules = Object.values(groups).filter(g => g.lectures.length > 0);
     const allSchedules = [...schedules, ...batchSyllabusSchedules];
 
     return res.status(200).json(allSchedules);

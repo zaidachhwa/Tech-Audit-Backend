@@ -128,16 +128,20 @@ export const getAllTeachers = async (req, res) => {
   try {
     // Auto-sync each teacher's subjects from current Syllabus assignments
     // so the Teachers page always reflects what was assigned on the Syllabus page.
-    const allSyllabi = await Syllabus.find().select("subject assignedTeachers");
+    const allSyllabi = await Syllabus.find().select("subject assignedTeacher assignedTeachers");
 
     // Build a map: teacherId -> Set of subjects assigned to them
     const teacherSubjectsMap = {};
     for (const syl of allSyllabi) {
-      if (!syl.subject || !syl.assignedTeachers?.length) continue;
-      for (const tId of syl.assignedTeachers) {
-        const key = tId.toString();
-        if (!teacherSubjectsMap[key]) teacherSubjectsMap[key] = new Set();
-        teacherSubjectsMap[key].add(syl.subject);
+      if (!syl.subject) continue;
+      const tIds = new Set();
+      if (syl.assignedTeacher) tIds.add(syl.assignedTeacher.toString());
+      if (syl.assignedTeachers) {
+        syl.assignedTeachers.forEach((id) => tIds.add(id.toString()));
+      }
+      for (const tId of tIds) {
+        if (!teacherSubjectsMap[tId]) teacherSubjectsMap[tId] = new Set();
+        teacherSubjectsMap[tId].add(syl.subject);
       }
     }
 

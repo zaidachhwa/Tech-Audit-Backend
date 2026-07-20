@@ -387,6 +387,8 @@ export const getAllStudents = async (req, res) => {
         } else {
           q.$or = batchConditions;
         }
+      } else {
+        q._id = null; // No assigned batches -> 0 students
       }
     }
 

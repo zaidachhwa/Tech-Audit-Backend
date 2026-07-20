@@ -1,44 +1,12 @@
 import * as batchService from "../services/batch.service.js";
 import jwt from "jsonwebtoken";
+import { getTeacherBatchIds } from "../utils/teacherScope.js";
 
 // ─── Helper: Get Batch IDs allocated to a specific Teacher ───────────────────
 export const getTeacherAllocatedBatchIds = async (teacherId) => {
-  const Teacher = (await import("../models/teacher.model.js")).Teacher;
-  const { Syllabus } = await import("../models/syllabus.model.js");
-  const { BatchSyllabus } = await import("../models/batchSyllabus.model.js");
-  const { BatchLecture } = await import("../models/batchLecture.model.js");
-
-  const teacher = await Teacher.findById(teacherId).lean();
-  if (!teacher) return [];
-
-  const batchIds = new Set();
-
-  // 1. Syllabi assigned to teacher
-  const syllabi = await Syllabus.find({
-    $or: [
-      { assignedTeacher: teacherId },
-      { assignedTeachers: teacherId },
-      { subject: { $in: teacher.subjects || [] } },
-    ],
-  }).lean();
-
-  const syllabusIds = syllabi.map((s) => s._id);
-
-  const batchSyllabi = await BatchSyllabus.find({
-    syllabus: { $in: syllabusIds },
-  }).lean();
-
-  batchSyllabi.forEach((bs) => bs.batch && batchIds.add(bs.batch.toString()));
-
-  // 2. BatchLectures assigned to teacher
-  const batchLectures = await BatchLecture.find({
-    $or: [{ assignedTo: teacherId }, { teacherIds: teacherId }],
-  }).lean();
-
-  batchLectures.forEach((bl) => bl.batch && batchIds.add(bl.batch.toString()));
-
-  return Array.from(batchIds);
+  return await getTeacherBatchIds(teacherId);
 };
+
 
 // ✅ PUBLIC: Get all batches (used currently, filtered if called by a Teacher)
 export const getPublicBatches = async (req, res) => {

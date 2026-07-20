@@ -167,13 +167,13 @@ export const createLecture = async (req, res) => {
         duration: lecture.duration,
         lectureType: lecture.lectureType,
         order: lecture.order,
-        completionStatus: "Pending",
+        completionStatus: "Yet to be scheduled",
         referenceTo: lecture.referenceTo || null,
         subLectures: lecture.subLectures.map(sl => ({
           title: sl.title,
           duration: sl.duration,
           order: sl.order,
-          completionStatus: "Pending"
+          completionStatus: "Yet to be scheduled"
         }))
       }));
       await BatchLecture.insertMany(batchLectureDocs);
@@ -543,16 +543,34 @@ export const getBatchLectures = async (req, res) => {
       }
     }
 
-    const lectures = await BatchLecture.find({ batch: batchId, syllabus: syllabusId })
+    const rawLectures = await BatchLecture.find({ batch: batchId, syllabus: syllabusId })
       .populate("assignedTo", "name email")
       .populate("templateLecture", "title description")
       .sort({ order: 1, createdAt: 1 });
+
+    // Deduplicate by title to ensure only 1 card per topic is shown
+    const mapByTitle = new Map();
+    for (const l of rawLectures) {
+      const tKey = (l.title || "").trim().toLowerCase();
+      if (!mapByTitle.has(tKey)) {
+        mapByTitle.set(tKey, l);
+      } else {
+        const existing = mapByTitle.get(tKey);
+        const lIsScheduled = l.dueDate || (l.completionStatus !== "Yet to be scheduled" && l.completionStatus !== "Pending");
+        const existingIsScheduled = existing.dueDate || (existing.completionStatus !== "Yet to be scheduled" && existing.completionStatus !== "Pending");
+        if (lIsScheduled && !existingIsScheduled) {
+          mapByTitle.set(tKey, l);
+        }
+      }
+    }
+
+    const lectures = Array.from(mapByTitle.values());
 
     const counts = {
       total: lectures.length,
       completed: lectures.filter((t) => t.completionStatus === "Completed").length,
       inProgress: lectures.filter((t) => t.completionStatus === "In Progress").length,
-      pending: lectures.filter((t) => t.completionStatus === "Pending").length,
+      pending: lectures.filter((t) => t.completionStatus === "Yet to be scheduled" || t.completionStatus === "Pending").length,
     };
 
     res.json({ lectures, counts, topics: lectures });
@@ -586,7 +604,7 @@ export const updateLectureStatus = async (req, res) => {
     const id = req.params.topicId || req.params.lectureId || req.params.id;
     const { status, subLectures } = req.body;
 
-    const validStatuses = ["Pending", "In Progress", "Completed"];
+    const validStatuses = ["Yet to be scheduled", "Pending", "In Progress", "Completed"];
     if (status && !validStatuses.includes(status)) {
       return res.status(400).json({ message: "Invalid status" });
     }
@@ -855,21 +873,43 @@ export const scheduleLecture = async (req, res) => {
       return res.status(400).json({ message: "batchId, teacherId, and dueDate are required" });
     }
 
-    const templateLecture = await Lecture.findById(topicId);
-    if (!templateLecture) {
-      return res.status(404).json({ message: "Template lecture not found" });
-    }
+    // Try finding topic in Lecture template or BatchLecture instance
+    let templateLecture = await Lecture.findById(topicId);
+    let existingBatchLecture = await BatchLecture.findById(topicId);
+
+    let syllabusId = templateLecture ? templateLecture.syllabus : (existingBatchLecture ? existingBatchLecture.syllabus : null);
+    let title = templateLecture ? templateLecture.title : (existingBatchLecture ? existingBatchLecture.title : "");
 
     // Find if a BatchLecture copy already exists for this batch
-    let batchLecture = await BatchLecture.findOne({
-      batch: batchId,
-      templateLecture: topicId,
+    let batchLecture = existingBatchLecture || await BatchLecture.findOne({
+      $or: [
+        { batch: batchId, templateLecture: topicId },
+        ...(syllabusId && title ? [{ batch: batchId, syllabus: syllabusId, title: title }] : [])
+      ]
     });
+
+    if (!batchLecture && !templateLecture) {
+      return res.status(404).json({ message: "Lecture/Topic not found" });
+    }
 
     if (batchLecture) {
       batchLecture.assignedTo = teacherId;
       batchLecture.dueDate = new Date(dueDate);
+      if (batchLecture.completionStatus !== "Completed") {
+        batchLecture.completionStatus = "In Progress";
+      }
       await batchLecture.save();
+
+      // Clean up any un-scheduled duplicate BatchLectures for this batch & title
+      if (batchLecture.syllabus && batchLecture.title) {
+        await BatchLecture.deleteMany({
+          _id: { $ne: batchLecture._id },
+          batch: batchId,
+          syllabus: batchLecture.syllabus,
+          title: batchLecture.title,
+          dueDate: null
+        });
+      }
     } else {
       // Create a new BatchLecture copy
       batchLecture = await BatchLecture.create({
@@ -884,20 +924,21 @@ export const scheduleLecture = async (req, res) => {
         order: templateLecture.order,
         assignedTo: teacherId,
         dueDate: new Date(dueDate),
-        completionStatus: "Pending",
-        subLectures: templateLecture.subLectures.map(sl => ({
+        completionStatus: "In Progress",
+        subLectures: (templateLecture.subLectures || []).map(sl => ({
           title: sl.title,
           duration: sl.duration,
           order: sl.order,
-          completionStatus: "Pending"
+          completionStatus: "Yet to be scheduled"
         }))
       });
     }
 
-    // Also update templateLecture's dueDate and assignedTo so that the card displays scheduled info
-    templateLecture.dueDate = new Date(dueDate);
-    templateLecture.assignedTo = teacherId;
-    await templateLecture.save();
+    if (templateLecture) {
+      templateLecture.dueDate = new Date(dueDate);
+      templateLecture.assignedTo = teacherId;
+      await templateLecture.save();
+    }
 
     // 🔗 Sync with Lecture Scheduler (Schedule model)
     try {
