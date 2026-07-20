@@ -144,6 +144,17 @@ export const assignSyllabusToBatch = async (req, res) => {
     const assignedBatches = [];
     let totalLecturesCreated = 0;
 
+    // Unassign any batches that were removed/unchecked for this syllabus
+    const previousBatchSyllabi = await BatchSyllabus.find({ syllabus: syllabusId });
+    const previousBatchIds = previousBatchSyllabi.map(bs => bs.batch.toString());
+    const finalBatchIdsStr = finalBatchIds.map(id => id.toString());
+    const removedBatchIds = previousBatchIds.filter(id => !finalBatchIdsStr.includes(id));
+
+    if (removedBatchIds.length > 0) {
+      await BatchSyllabus.deleteMany({ syllabus: syllabusId, batch: { $in: removedBatchIds } });
+      await BatchLecture.deleteMany({ syllabus: syllabusId, batch: { $in: removedBatchIds } });
+    }
+
     for (const bId of finalBatchIds) {
       const batch = await Batch.findById(bId);
       if (!batch) {
@@ -151,50 +162,63 @@ export const assignSyllabusToBatch = async (req, res) => {
       }
 
       // Check if already assigned
-      const existing = await BatchSyllabus.findOne({
+      let batchSyllabus = await BatchSyllabus.findOne({
         batch: bId,
         syllabus: syllabusId,
       });
 
-      if (existing) {
-        continue;
+      if (!batchSyllabus) {
+        batchSyllabus = await BatchSyllabus.create({
+          batch: bId,
+          syllabus: syllabusId,
+          assignedBy: req.user.id,
+          notes: notes || "",
+          dueDate: dueDate,
+        });
+      } else {
+        if (notes) batchSyllabus.notes = notes;
+        if (dueDate) batchSyllabus.dueDate = dueDate;
+        await batchSyllabus.save();
       }
-
-      const batchSyllabus = await BatchSyllabus.create({
-        batch: bId,
-        syllabus: syllabusId,
-        assignedBy: req.user.id,
-        notes: notes || "",
-        dueDate: dueDate,
-      });
 
       assignedBatches.push(batchSyllabus);
 
       if (templateLectures.length > 0) {
-        const batchLectureDocs = templateLectures.map((lecture) => ({
+        // Find existing BatchLectures for this batch & syllabus
+        const existingBatchLectures = await BatchLecture.find({
           batch: bId,
-          syllabus: syllabusId,
-          templateLecture: lecture._id,
-          title: lecture.title,
-          description: lecture.description,
-          chapterId: lecture.chapterId,
-          duration: lecture.duration,
-          lectureType: lecture.lectureType,
-          order: lecture.order,
-          completionStatus: "Pending",
-          subLectures: lecture.subLectures.map(sl => ({
-            title: sl.title,
-            duration: sl.duration,
-            order: sl.order,
-            completionStatus: "Pending"
-          }))
-        }));
-        const createdBatchLectures = await BatchLecture.insertMany(batchLectureDocs);
-        totalLecturesCreated += createdBatchLectures.length;
+          syllabus: syllabusId
+        });
+        const existingTemplateIds = new Set(existingBatchLectures.map(bl => bl.templateLecture?.toString()));
+
+        const missingLectures = templateLectures.filter(l => !existingTemplateIds.has(l._id.toString()));
+
+        if (missingLectures.length > 0) {
+          const batchLectureDocs = missingLectures.map((lecture) => ({
+            batch: bId,
+            syllabus: syllabusId,
+            templateLecture: lecture._id,
+            title: lecture.title,
+            description: lecture.description,
+            chapterId: lecture.chapterId,
+            duration: lecture.duration,
+            lectureType: lecture.lectureType,
+            order: lecture.order,
+            completionStatus: "Pending",
+            subLectures: (lecture.subLectures || []).map(sl => ({
+              title: sl.title,
+              duration: sl.duration,
+              order: sl.order,
+              completionStatus: "Pending"
+            }))
+          }));
+          const createdBatchLectures = await BatchLecture.insertMany(batchLectureDocs);
+          totalLecturesCreated += createdBatchLectures.length;
+        }
       }
     }
 
-    res.status(201).json({
+    res.status(200).json({
       message: `Syllabus assigned to ${assignedBatches.length} batch(es) successfully`,
       assignedBatches,
       topicsCreated: totalLecturesCreated, // compatibility

@@ -383,21 +383,10 @@ export const getAllStudents = async (req, res) => {
         }));
         
         if (q.$or) {
-          // If search condition already has $or, wrap them
           q = { $and: [q, { $or: batchConditions }] };
         } else {
           q.$or = batchConditions;
         }
-      } else {
-        // Teacher has no batches, return empty results
-        return res.status(200).json({
-          total: 0,
-          totalActive: 0,
-          totalPending: 0,
-          page: Number(page),
-          limit: Number(limit),
-          students: []
-        });
       }
     }
 

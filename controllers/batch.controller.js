@@ -196,6 +196,24 @@ export const addStudentToBatch = async (req, res) => {
   }
 };
 
+export const assignTeachersToBatch = async (req, res) => {
+  try {
+    const Batch = (await import("../models/batch.model.js")).default;
+    const { teacherIds } = req.body;
+    const batch = await Batch.findByIdAndUpdate(
+      req.params.id,
+      { teachers: teacherIds || [] },
+      { new: true }
+    ).populate("teachers", "name email phone");
+
+    if (!batch) return res.status(404).json({ message: "Batch not found" });
+
+    return res.status(200).json({ message: "Teachers assigned to batch successfully", batch });
+  } catch (err) {
+    return res.status(500).json({ message: err.message });
+  }
+};
+
 export const updateBatch = async (req, res) => {
   try {
     const updatedBatch = await batchService.updateBatchService(

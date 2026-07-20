@@ -4,6 +4,7 @@ import {
   getAllBatches,
   getBatchById,
   addStudentToBatch,
+  assignTeachersToBatch,
   getPublicBatches,
   updateBatch,
   deleteBatch,
@@ -30,6 +31,7 @@ router.get("/numbers", verifyToken, getBatchNumbersByName);
 router.get("/:id/students", verifyToken, getBatchById);  // teachers can access this
 router.get("/:id", verifyToken, isAdminOrTeacher, getBatchById);
 router.put("/:id/add-student", verifyToken, isAdminOrTeacher, addStudentToBatch);
+router.put("/:id/assign-teachers", verifyToken, isAdminOrTeacher, assignTeachersToBatch);
 router.put("/:id", verifyToken, isAdminOrTeacher, updateBatch);
 router.delete("/:id", verifyToken, isAdminOrTeacher, deleteBatch);
 

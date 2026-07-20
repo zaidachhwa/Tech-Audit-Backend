@@ -8,6 +8,7 @@ const batchSchema = new mongoose.Schema(
     course: { type: String, default: "" }, // v2 field
     semester: { type: String, default: "" }, // v2 field
     students: [{ type: mongoose.Schema.Types.ObjectId, ref: "Student" }],
+    teachers: [{ type: mongoose.Schema.Types.ObjectId, ref: "Teacher" }],
   },
   { timestamps: true }
 );

@@ -11,6 +11,8 @@ import { BatchSyllabus } from "../models/batchSyllabus.model.js";
 export const getAdminDashboard = async (req, res) => {
   try {
     const totalStudents = await Student.countDocuments();
+    const activeStudents = await Student.countDocuments({ isActive: true });
+    const pendingStudents = await Student.countDocuments({ isActive: false });
     const totalTeachers = await Teacher.countDocuments();
     const totalSubjects = await Syllabus.countDocuments();
     const totalBatches = await Batch.countDocuments();
@@ -26,6 +28,9 @@ export const getAdminDashboard = async (req, res) => {
 
     res.json({
       totalStudents,
+      activeStudents,
+      pendingStudents,
+      pendingApprovals: pendingStudents,
       totalTeachers,
       totalSubjects,
       totalBatches,
