@@ -387,31 +387,19 @@ export const updateSchedule = async (req, res) => {
     }
 
     if (role === "teacher") {
-      // Validate that this is the assigned teacher (primary or lecture-level)
-      const isPrimary = schedule.teacher.toString() === userId;
-      const isLectureTeacher = schedule.lectures.some(l => l.teacher && l.teacher.toString() === userId);
-      if (!isPrimary && !isLectureTeacher) {
+      // Validate that this is the assigned teacher (primary or lecture-level) or unassigned/pending schedule
+      const isPrimary = String(schedule.teacher) === String(userId);
+      const isLectureTeacher = schedule.lectures.some(l => l.teacher && String(l.teacher?._id || l.teacher) === String(userId));
+      const isUnassignedOrPending = !schedule.teacher || schedule.verificationStatus === "pending_teacher" || schedule.verificationStatus === "pending";
+      if (!isPrimary && !isLectureTeacher && !isUnassignedOrPending) {
         return res.status(403).json({ message: "Access denied. You can only edit your own schedules." });
-      }
-
-      // Restrict teachers from changing parent schedule metadata (subject, batch, teacher)
-      if (subject && subject !== schedule.subject) {
-        return res.status(403).json({ message: "Forbidden: Teachers cannot change the subject title." });
-      }
-      if (batch && batch !== schedule.batch.toString()) {
-        return res.status(403).json({ message: "Forbidden: Teachers cannot change the batch." });
-      }
-      if (teacher && teacher !== schedule.teacher.toString()) {
-        return res.status(403).json({ message: "Forbidden: Teachers cannot change the assigned teacher." });
       }
     }
 
     // Apply updates
-    if (role === "admin") {
-      if (subject) schedule.subject = subject;
-      if (batch) schedule.batch = batch;
-      if (teacher) schedule.teacher = teacher;
-    }
+    if (subject) schedule.subject = subject;
+    if (batch) schedule.batch = batch;
+    if (teacher) schedule.teacher = teacher;
 
     // Detect Saturday lectures that need announcements before saving new lectures list
     const newSaturdayLectures = [];
@@ -492,8 +480,15 @@ export const deleteSchedule = async (req, res) => {
       return res.status(404).json({ message: "Schedule not found" });
     }
 
-    if (role === "teacher" && String(schedule.teacher) !== String(userId)) {
-      return res.status(403).json({ message: "Access denied. You can only delete your own schedules." });
+    if (role === "teacher") {
+      const isPrimaryTeacher = String(schedule.teacher) === String(userId);
+      const isLectureTeacher = (schedule.lectures || []).some(l => String(l.teacher?._id || l.teacher) === String(userId));
+      const isCreator = schedule.createdBy ? String(schedule.createdBy) === String(userId) : false;
+      const isPendingOrUnassigned = !schedule.teacher || schedule.verificationStatus === "pending_teacher" || schedule.verificationStatus === "pending";
+
+      if (!isPrimaryTeacher && !isLectureTeacher && !isCreator && !isPendingOrUnassigned) {
+        return res.status(403).json({ message: "Access denied. You can only delete schedules assigned to you or created by you." });
+      }
     }
 
     await Schedule.findByIdAndDelete(req.params.id);
@@ -893,8 +888,8 @@ export const verifySchedule = async (req, res) => {
     const { action } = req.body; // "approve" | "reject"
     const { id: userId, role } = req.user;
 
-    if (role !== "teacher") {
-      return res.status(403).json({ message: "Only teachers can verify schedules." });
+    if (role !== "admin" && role !== "teacher") {
+      return res.status(403).json({ message: "Access denied." });
     }
 
     if (!["approve", "reject"].includes(action)) {
@@ -906,11 +901,7 @@ export const verifySchedule = async (req, res) => {
       return res.status(404).json({ message: "Schedule not found." });
     }
 
-    if (schedule.verificationStatus !== "pending_teacher") {
-      return res.status(400).json({ message: "This schedule is not awaiting your verification." });
-    }
-
-    if (String(schedule.teacher) !== String(userId)) {
+    if (role === "teacher" && String(schedule.teacher) !== String(userId)) {
       return res.status(403).json({ message: "Access denied. This schedule is not assigned to you." });
     }
 
@@ -919,7 +910,7 @@ export const verifySchedule = async (req, res) => {
       await schedule.save();
       return res.status(200).json({ message: "Schedule verified and approved successfully." });
     } else {
-      // On rejection, delete the schedule entirely so admin can recreate
+      // On rejection, delete the schedule entirely so admin/teacher can recreate
       await Schedule.findByIdAndDelete(id);
       return res.status(200).json({ message: "Schedule rejected and removed." });
     }
@@ -927,3 +918,146 @@ export const verifySchedule = async (req, res) => {
     return res.status(500).json({ message: err.message });
   }
 };
+
+/**
+ * Check for scheduling conflicts (batch + teacher double-booking)
+ * Role: Admin, Teacher
+ *
+ * Body: {
+ *   lectures: [{ index, date, time_slot, teacher, batchIds }]
+ *   currentScheduleId?: string   // exclude this schedule when checking (for edit mode)
+ * }
+ *
+ * Returns: { conflicts: [{ lectureIndex, type, conflictWith }] }
+ */
+export const checkConflicts = async (req, res) => {
+  try {
+    const { lectures, currentScheduleId, batchIds } = req.body;
+
+    if (!lectures || !Array.isArray(lectures) || lectures.length === 0) {
+      return res.status(400).json({ message: "lectures array is required." });
+    }
+
+    // Helper: parse a time_slot like "10:00-12:00" into minutes since midnight
+    const parseTimeSlot = (slot) => {
+      if (!slot || typeof slot !== "string") return null;
+      const parts = slot.split("-");
+      if (parts.length !== 2) return null;
+      const toMinutes = (t) => {
+        const [h, m] = t.trim().split(":").map(Number);
+        if (isNaN(h) || isNaN(m)) return null;
+        return h * 60 + m;
+      };
+      const start = toMinutes(parts[0]);
+      const end = toMinutes(parts[1]);
+      if (start === null || end === null || end <= start) return null;
+      return { start, end };
+    };
+
+    // Helper: check if two time ranges overlap
+    const overlaps = (a, b) => a.start < b.end && b.start < a.end;
+
+    const conflicts = [];
+
+    // Fetch all existing schedules (excluding current one in edit mode)
+    const query = {};
+    if (currentScheduleId) {
+      query._id = { $ne: currentScheduleId };
+    }
+
+    const existingSchedules = await Schedule.find(query)
+      .select("subject batch teacher lectures")
+      .populate("batch", "batch_name batch_no")
+      .populate("teacher", "name")
+      .lean();
+
+    for (const proposed of lectures) {
+      const { index, date, time_slot, teacher: teacherIdRaw, batchIds: lecBatchIds } = proposed;
+
+      if (!date || !time_slot) continue; // skip rows without date or time_slot
+
+      const proposedTime = parseTimeSlot(time_slot);
+      if (!proposedTime) continue;
+
+      const proposedDate = new Date(date).toISOString().split("T")[0];
+      const proposedTeacherId = typeof teacherIdRaw === "object"
+        ? (teacherIdRaw?._id || "")
+        : (teacherIdRaw || "");
+
+      // Combine batch IDs: from the lecture itself or from the parent batchIds
+      const proposedBatchIds = new Set([
+        ...(lecBatchIds || []),
+        ...(batchIds || [])
+      ].map(String).filter(Boolean));
+
+      for (const existing of existingSchedules) {
+        const existingBatchId = existing.batch?._id?.toString() || existing.batch?.toString() || "";
+
+        for (const exLec of existing.lectures || []) {
+          if (!exLec.date || !exLec.time_slot) continue;
+
+          const exTime = parseTimeSlot(exLec.time_slot);
+          if (!exTime) continue;
+
+          const exDate = new Date(exLec.date).toISOString().split("T")[0];
+          if (exDate !== proposedDate) continue;
+          if (!overlaps(proposedTime, exTime)) continue;
+
+          // ─── Batch conflict ─────────────────────────────────────────────
+          if (proposedBatchIds.has(existingBatchId)) {
+            conflicts.push({
+              lectureIndex: index,
+              type: "batch",
+              conflictWith: {
+                scheduleId: existing._id,
+                subject: existing.subject,
+                batchName: existing.batch?.batch_name,
+                batchNo: existing.batch?.batch_no,
+                existingTimeSlot: exLec.time_slot,
+                existingDate: exDate,
+                existingLectureTitle: exLec.title
+              }
+            });
+          }
+
+          // ─── Teacher conflict ────────────────────────────────────────────
+          if (proposedTeacherId) {
+            const exTeacherId = typeof exLec.teacher === "object"
+              ? (exLec.teacher?._id?.toString() || "")
+              : (exLec.teacher?.toString() || "");
+
+            if (exTeacherId && exTeacherId === proposedTeacherId) {
+              conflicts.push({
+                lectureIndex: index,
+                type: "teacher",
+                conflictWith: {
+                  scheduleId: existing._id,
+                  subject: existing.subject,
+                  batchName: existing.batch?.batch_name,
+                  batchNo: existing.batch?.batch_no,
+                  existingTimeSlot: exLec.time_slot,
+                  existingDate: exDate,
+                  existingLectureTitle: exLec.title
+                }
+              });
+            }
+          }
+        }
+      }
+    }
+
+    // Deduplicate: same lectureIndex + same type + same scheduleId
+    const seen = new Set();
+    const unique = conflicts.filter(c => {
+      const key = `${c.lectureIndex}_${c.type}_${c.conflictWith.scheduleId}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+
+    return res.status(200).json({ conflicts: unique });
+  } catch (err) {
+    return res.status(500).json({ message: err.message });
+  }
+};
+

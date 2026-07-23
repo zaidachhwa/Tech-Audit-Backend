@@ -15,7 +15,8 @@ import {
   uploadNotesGeneric,
   deleteNotes,
   verifySchedule,
-  updateBatchLectureFromScheduler
+  updateBatchLectureFromScheduler,
+  checkConflicts
 } from "../controllers/schedule.controller.js";
 import { verifyToken, isAdmin, isAdminOrTeacher, isTeacher } from "../middleware/auth.middleware.js";
 import { uploadNotes } from "../middleware/upload.js";
@@ -25,6 +26,7 @@ const router = Router();
 router.post("/create", verifyToken, isAdminOrTeacher, createSchedule);
 router.get("/list", verifyToken, listSchedules);
 router.put("/batch-lecture/:id", verifyToken, updateBatchLectureFromScheduler);
+router.post("/check-conflicts", verifyToken, isAdminOrTeacher, checkConflicts);
 
 // Homework and Submissions API
 router.post("/:scheduleId/lectures/:lectureId/homework", verifyToken, saveHomework);
@@ -61,6 +63,6 @@ router.get("/:id/submissions", verifyToken, isAdminOrTeacher, getScheduleSubmiss
 router.get("/:id", verifyToken, getScheduleById);
 router.put("/update/:id", verifyToken, updateSchedule);
 router.delete("/delete/:id", verifyToken, isAdminOrTeacher, deleteSchedule);
-router.patch("/:id/verify", verifyToken, isTeacher, verifySchedule);
+router.patch("/:id/verify", verifyToken, isAdminOrTeacher, verifySchedule);
 
 export default router;

@@ -30,7 +30,7 @@ router.get("/", verifyToken, async (req, res, next) => {
 // GET single subject details
 router.get("/:id", verifyToken, async (req, res) => {
   const { id } = req.params;
-  let subject = await Syllabus.findById(id).populate("lectures");
+  let subject = await Syllabus.findById(id).populate("lectures").populate("topics");
   if (!subject) {
     subject = await SubjectTemplate.findById(id);
   }
