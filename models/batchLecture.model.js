@@ -40,6 +40,24 @@ const batchLectureSchema = new mongoose.Schema(
     completedAt: { type: Date },
     remarks: { type: String, default: "" },
     
+    punchInTime: { type: Date, default: null },
+    punchOutTime: { type: Date, default: null },
+    punchInNotes: { type: String, default: "" },
+    punchOutNotes: { type: String, default: "" },
+    punchInFile: {
+      fileName: { type: String, default: "" },
+      fileUrl: { type: String, default: "" }
+    },
+    punchOutFile: {
+      fileName: { type: String, default: "" },
+      fileUrl: { type: String, default: "" }
+    },
+    punchStatus: {
+      type: String,
+      enum: ["PENDING", "PUNCHED_IN", "PUNCHED_OUT"],
+      default: "PENDING"
+    },
+
     subLectures: [
       {
         title: { type: String, required: true },

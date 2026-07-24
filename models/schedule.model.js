@@ -21,7 +21,24 @@ const lectureSchema = new mongoose.Schema({
     fileUrl: { type: String, default: "" }
   },
   isSaturdayLecture: { type: Boolean, default: false },
-  teacher: { type: mongoose.Schema.Types.ObjectId, ref: "Teacher" }
+  teacher: { type: mongoose.Schema.Types.ObjectId, ref: "Teacher" },
+  punchInTime: { type: Date, default: null },
+  punchOutTime: { type: Date, default: null },
+  punchInNotes: { type: String, default: "" },
+  punchOutNotes: { type: String, default: "" },
+  punchInFile: {
+    fileName: { type: String, default: "" },
+    fileUrl: { type: String, default: "" }
+  },
+  punchOutFile: {
+    fileName: { type: String, default: "" },
+    fileUrl: { type: String, default: "" }
+  },
+  punchStatus: {
+    type: String,
+    enum: ["PENDING", "PUNCHED_IN", "PUNCHED_OUT"],
+    default: "PENDING"
+  }
 });
 
 const scheduleSchema = new mongoose.Schema(
