@@ -20,9 +20,27 @@ const storage = multer.diskStorage({
   }
 });
 
-// File filter to allow all file types for testing
+// File filter to allow images, documents, and videos
+const allowedMimeTypes = [
+  // Images
+  "image/jpeg", "image/png", "image/gif", "image/webp", "image/jpg",
+  // Documents
+  "application/pdf",
+  "application/msword", "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  "text/plain",
+  "application/vnd.ms-excel", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  "application/vnd.ms-powerpoint", "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+  // Videos
+  "video/mp4", "video/quicktime", "video/x-msvideo", "video/x-matroska", "video/webm"
+];
+
 const fileFilter = (req, file, cb) => {
-  cb(null, true);
+  if (allowedMimeTypes.includes(file.mimetype)) {
+    cb(null, true);
+  } else {
+    // Return error if file type is not allowed
+    cb(new Error("Invalid file type. Only images, documents, and allowed videos are supported."), false);
+  }
 };
 
 // 10MB size limit

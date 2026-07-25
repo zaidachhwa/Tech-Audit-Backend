@@ -553,20 +553,18 @@ export const uploadNotesGeneric = async (req, res) => {
     const files = req.files || {};
     const response = {};
 
-    if (files.notes_shared && files.notes_shared[0]) {
-      const file = files.notes_shared[0];
-      response.notes_shared = {
+    if (files.notes_shared && files.notes_shared.length > 0) {
+      response.notes_shared = files.notes_shared.map(file => ({
         fileName: file.originalname,
         fileUrl: `/uploads/${file.filename}`
-      };
+      }));
     }
     
-    if (files.notes_teacher && files.notes_teacher[0]) {
-      const file = files.notes_teacher[0];
-      response.notes_teacher = {
+    if (files.notes_teacher && files.notes_teacher.length > 0) {
+      response.notes_teacher = files.notes_teacher.map(file => ({
         fileName: file.originalname,
         fileUrl: `/uploads/${file.filename}`
-      };
+      }));
     }
 
     return res.status(200).json(response);
@@ -606,20 +604,18 @@ export const saveNotes = async (req, res) => {
     
     // Process notes_shared
     if (files.notes_shared && files.notes_shared.length > 0) {
-      const file = files.notes_shared[0];
-      lecture.notes_shared = {
+      lecture.notes_shared = files.notes_shared.map(file => ({
         fileName: file.originalname,
         fileUrl: `${req.protocol}://${req.get("host")}/uploads/${file.filename}`
-      };
+      }));
     }
 
     // Process notes_teacher
     if (files.notes_teacher && files.notes_teacher.length > 0) {
-      const file = files.notes_teacher[0];
-      lecture.notes_teacher = {
+      lecture.notes_teacher = files.notes_teacher.map(file => ({
         fileName: file.originalname,
         fileUrl: `${req.protocol}://${req.get("host")}/uploads/${file.filename}`
-      };
+      }));
     }
 
     await schedule.save();

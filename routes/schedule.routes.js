@@ -35,8 +35,8 @@ router.post(
   verifyToken, 
   isAdminOrTeacher, 
   uploadNotes.fields([
-    { name: "notes_shared", maxCount: 1 },
-    { name: "notes_teacher", maxCount: 1 }
+    { name: "notes_shared", maxCount: 3 },
+    { name: "notes_teacher", maxCount: 3 }
   ]), 
   saveNotes
 );
@@ -48,8 +48,8 @@ router.post(
   verifyToken, 
   isAdminOrTeacher, 
   uploadNotes.fields([
-    { name: "notes_shared", maxCount: 1 },
-    { name: "notes_teacher", maxCount: 1 }
+    { name: "notes_shared", maxCount: 3 },
+    { name: "notes_teacher", maxCount: 3 }
   ]), 
   uploadNotesGeneric
 );

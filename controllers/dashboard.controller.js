@@ -147,16 +147,9 @@ export const getStudentDashboard = async (req, res) => {
           .lean()
       : [];
 
-    // Homework — direct by studentId OR via batch (same logic as getMyHomework)
-    const homeworkQuery = {
-      $or: [
-        { student: studentId },
-        { student: { $in: batchStudentIds }, batchName: studentDoc?.batch_name },
-      ],
-    };
-    if (batchId) {
-      homeworkQuery.$or.push({ student: { $in: batchStudentIds }, batch: batchId });
-    }
+    // Homework — direct by studentId
+    const homeworkQuery = { student: studentId };
+    
     const homework = await Homework.find(homeworkQuery)
       .populate("assignedBy", "name")
       .populate({ path: "lecture", select: "title", populate: { path: "syllabus", select: "subject" } })

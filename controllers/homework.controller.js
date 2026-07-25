@@ -174,28 +174,9 @@ export const getMyHomework = async (req, res) => {
   try {
     const studentId = req.user.id;
 
-    // 1. Get this student's batch_name + batch_no
-    const student = await Student.findById(studentId).lean();
-    if (!student) {
-      return res.status(404).json({ message: "Student not found" });
-    }
-
-    // 2. Find ALL students with same batch_name + batch_no from Student collection
-    //    (more reliable than Batch.students array which may be out of sync)
-    const batchMates = await Student.find({
-      batch_name: student.batch_name,
-      batch_no: student.batch_no,
-    }).select("_id").lean();
-
-    const batchStudentIds = batchMates.map((s) => s._id);
-    // Ensure current student is always included
-    if (!batchStudentIds.some((id) => id.toString() === studentId.toString())) {
-      batchStudentIds.push(studentId);
-    }
-
-    // 3. Find homework for ANY student in this batch (same as dashboard)
+    // 3. Find homework assigned directly to the current student
     const homeworkList = await Homework.find({
-      student: { $in: batchStudentIds },
+      student: studentId
     })
       .populate("assignedBy", "name email")
       .populate({

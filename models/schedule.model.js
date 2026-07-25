@@ -13,12 +13,12 @@ const lectureSchema = new mongoose.Schema({
     accept_submissions: { type: Boolean, default: true }
   },
   notes_shared: {
-    fileName: { type: String, default: "" },
-    fileUrl: { type: String, default: "" }
+    type: mongoose.Schema.Types.Mixed,
+    default: () => []
   },
   notes_teacher: {
-    fileName: { type: String, default: "" },
-    fileUrl: { type: String, default: "" }
+    type: mongoose.Schema.Types.Mixed,
+    default: () => []
   },
   isSaturdayLecture: { type: Boolean, default: false },
   teacher: { type: mongoose.Schema.Types.ObjectId, ref: "Teacher" },
