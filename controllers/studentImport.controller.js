@@ -1,6 +1,7 @@
 import bcrypt from "bcryptjs";
 import { Student } from "../models/student.model.js";
 import Batch from "../models/batch.model.js";
+import Settings from "../models/settings.model.js";
 import { sendStudentCredentials, generateRandomPassword } from "../utils/email.js";
 
 /**
@@ -86,6 +87,20 @@ export const bulkImportStudents = async (req, res) => {
       });
     }
 
+    // Fetch custom fields schema
+    const setting = await Settings.findOne({ key: "student_custom_fields" });
+    const customFieldsSchema = setting?.value || [];
+    
+    // Map custom fields to CSV column indexes
+    const customFieldIndexes = {};
+    customFieldsSchema.forEach(field => {
+      const colName = field.name.toLowerCase();
+      const idx = headers.indexOf(colName);
+      if (idx !== -1) {
+        customFieldIndexes[field.name] = idx;
+      }
+    });
+
     // 5. Pre-fetch existing emails and phones from DB for O(1) checks
     const existingStudents = await Student.find({}, "email phoneNo").lean();
     const existingEmails = new Set(existingStudents.map(s => s.email.toLowerCase()));
@@ -124,6 +139,28 @@ export const bulkImportStudents = async (req, res) => {
         });
         continue;
       }
+
+      // Check required custom fields
+      let missingCustomField = false;
+      const studentCustomFields = {};
+      
+      for (const field of customFieldsSchema) {
+        const idx = customFieldIndexes[field.name];
+        const val = idx !== undefined && idx !== -1 ? (row[idx]?.trim() || "") : "";
+        
+        if (field.isRequired && !val) {
+          failedCount++;
+          errors.push({
+            row: rowNum,
+            reason: `Missing required custom field: "${field.name}"`
+          });
+          missingCustomField = true;
+          break;
+        }
+        studentCustomFields[field.name] = val;
+      }
+
+      if (missingCustomField) continue;
 
       // Validate email format
       const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -194,6 +231,7 @@ export const bulkImportStudents = async (req, res) => {
         password: hashedPassword,
         batch_name,
         batch_no,
+        customFields: studentCustomFields,
         isActive: true // Automatically approved when added by admin
       });
 

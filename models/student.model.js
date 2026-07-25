@@ -23,6 +23,7 @@ const studentSchema = new mongoose.Schema(
     aadhaarPhoto: { type: String, default: "" },
     isActive: { type: Boolean, default: false },
     lastLogin: { type: Date },
+    customFields: { type: Map, of: mongoose.Schema.Types.Mixed, default: {} },
   },
   { timestamps: true }
 );
