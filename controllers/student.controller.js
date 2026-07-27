@@ -7,6 +7,7 @@ import { BatchSyllabus } from "../models/batchSyllabus.model.js";
 import { Syllabus } from "../models/syllabus.model.js";
 import Homework from "../models/homework.model.js";
 import { Attendance } from "../models/attendance.model.js";
+import { StudentAttendance } from "../models/studentAttendance.model.js";
 import { ActivityLog } from "../models/activityLog.model.js";
 import { sendStudentCredentials, generateRandomPassword } from "../utils/email.js";
 import { getTeacherBatchIds } from "../utils/teacherScope.js";
@@ -437,6 +438,9 @@ export const deleteStudent = async (req, res) => {
       { batch_name: student.batch_name, batch_no: student.batch_no },
       { $pull: { students: student._id } }
     );
+
+    // Delete all attendance records associated with this student
+    await StudentAttendance.deleteMany({ student: student._id });
 
     await Student.findByIdAndDelete(id);
 
