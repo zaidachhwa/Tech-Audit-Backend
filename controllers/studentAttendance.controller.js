@@ -286,6 +286,7 @@ export const studentPunchIn = async (req, res) => {
 
     return res.json({ message: "Punched In successfully!", record });
   } catch (err) {
+    console.error("Punch In Error:", err);
     if (err.code === 11000) {
       return res.status(400).json({ message: "You have already punched in today." });
     }
@@ -331,6 +332,7 @@ export const studentPunchOut = async (req, res) => {
 
     return res.json({ message: "Punched Out successfully!", record });
   } catch (err) {
+    console.error("Punch Out Error:", err);
     return res.status(500).json({ message: err.message });
   }
 };
