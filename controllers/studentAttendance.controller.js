@@ -237,16 +237,19 @@ export const studentPunchIn = async (req, res) => {
 
     const geoCheck = await verifyGeofence(lat, lng);
     if (!geoCheck.ok) {
+      console.error("Geofence Error:", geoCheck.error);
       return res.status(403).json({ message: geoCheck.error });
     }
 
     if (!req.file) {
+      console.error("Punch In Error: A photo selfie is required.");
       return res.status(400).json({ message: "A photo selfie is required to punch in." });
     }
     const photoUrl = `/uploads/${req.file.filename}`;
 
     const batch = await findStudentBatch(studentId);
     if (!batch) {
+      console.error(`Punch In Error: Student ${studentId} is not assigned to any batch.`);
       return res.status(400).json({ message: "You are not assigned to any batch." });
     }
 
@@ -256,6 +259,7 @@ export const studentPunchIn = async (req, res) => {
     // Check if already punched in today
     const existing = await StudentAttendance.findOne({ student: studentId, date: dateKey });
     if (existing && existing.status !== "NOT_PUNCHED") {
+      console.error(`Punch In Error: Student ${studentId} has already punched in today.`);
       return res.status(400).json({
         message: existing.status === "PUNCHED_IN"
           ? "You have already punched in today."
@@ -303,10 +307,12 @@ export const studentPunchOut = async (req, res) => {
 
     const geoCheck = await verifyGeofence(lat, lng);
     if (!geoCheck.ok) {
+      console.error("Geofence Error:", geoCheck.error);
       return res.status(403).json({ message: geoCheck.error });
     }
 
     if (!req.file) {
+      console.error("Punch Out Error: A photo selfie is required.");
       return res.status(400).json({ message: "A photo selfie is required to punch out." });
     }
     const photoUrl = `/uploads/${req.file.filename}`;
@@ -317,6 +323,7 @@ export const studentPunchOut = async (req, res) => {
     const record = await StudentAttendance.findOne({ student: studentId, date: dateKey });
 
     if (!record || record.status !== "PUNCHED_IN") {
+      console.error(`Punch Out Error: Student ${studentId} attempted to punch out without punching in.`);
       return res.status(400).json({ message: "You must punch in first before punching out." });
     }
 
