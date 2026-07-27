@@ -430,7 +430,9 @@ export const getStudentAttendanceLogs = async (req, res) => {
       .sort({ date: -1, createdAt: -1 })
       .lean();
 
-    return res.json({ records });
+    const validRecords = records.filter(record => record.student != null);
+
+    return res.json({ records: validRecords });
   } catch (err) {
     return res.status(500).json({ message: err.message });
   }

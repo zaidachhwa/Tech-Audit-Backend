@@ -11,6 +11,10 @@ import { verifyToken, isStudent, isAdminOrTeacher, isAdmin } from "../middleware
 import { uploadNotes } from "../middleware/upload.js";
 import fs from "fs";
 import path from "path";
+import { fileURLToPath } from "url";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const router = Router();
 
@@ -21,7 +25,7 @@ router.get("/photo", (req, res) => {
     if (!file) return res.status(400).send("No file provided");
     
     const safePath = path.basename(file);
-    const fullPath = path.resolve("uploads", safePath);
+    const fullPath = path.resolve(__dirname, "..", "uploads", safePath);
     
     if (fs.existsSync(fullPath)) {
       res.sendFile(fullPath);
