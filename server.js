@@ -140,7 +140,7 @@ app.use("/api/assignment", homeworkRoutes); // compatibility
 app.use("/api", lectureRoutes);
 app.use("/api/announcement", announcementRoutes);
 app.use("/api/attendance", attendanceRoutes);
-app.use("/api/student-attendance", studentAttendanceRoutes);
+app.use("/api/attendance/student", studentAttendanceRoutes);
 app.use("/api/grades", gradeRoutes);
 app.use("/api/grade", gradeRoutes); // compatibility
 // ERROR HANDLER

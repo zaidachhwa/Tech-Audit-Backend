@@ -19,7 +19,7 @@ router.get("/today", verifyToken, isStudent, getTodayStatus);
 router.get("/my", verifyToken, isStudent, getMyAttendance);
 
 // Teacher/Admin routes
-router.get("/logs", verifyToken, isAdminOrTeacher, getStudentAttendanceLogs);
+router.get("/records", verifyToken, isAdminOrTeacher, getStudentAttendanceLogs);
 
 // Admin-only routes
 router.patch("/:id/edit", verifyToken, isAdmin, adminEditPunchTime);
