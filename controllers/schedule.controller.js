@@ -90,10 +90,12 @@ export const listSchedules = async (req, res) => {
     let query = {};
 
     if (role === "teacher") {
-      // Teachers see schedules where they are primary teacher OR assigned to any lecture
+      // Teachers see schedules where they are primary teacher OR assigned to any lecture OR were the original teacher before transfer
       query.$or = [
         { teacher: userId },
-        { "lectures.teacher": userId }
+        { "lectures.teacher": userId },
+        { "lectures.originalTeacher": userId },
+        { "lectures.transferHistory.originalTeacher": userId }
       ];
     } else if (role === "student") {
       // Students only see schedules matching their enrolled Batch AND that are approved
@@ -124,6 +126,7 @@ export const listSchedules = async (req, res) => {
       .populate("batch", "batch_name batch_no")
       .populate("teacher", "name email")
       .populate("lectures.teacher", "name email")
+      .populate("lectures.originalTeacher", "name")
       .sort({ createdAt: -1 })
       .lean();
 
@@ -134,7 +137,10 @@ export const listSchedules = async (req, res) => {
 
     let studentBatchResolved = null;
     if (role === "teacher") {
-      batchLecturesQuery.assignedTo = userId;
+      batchLecturesQuery.$or = [
+        { assignedTo: userId },
+        { originalTeacher: userId }
+      ];
     } else if (role === "student") {
       const student = await Student.findById(userId).lean();
       if (student) {
@@ -155,6 +161,7 @@ export const listSchedules = async (req, res) => {
       .populate("batch", "batch_name batch_no")
       .populate("syllabus", "subject name")
       .populate("assignedTo", "name email")
+      .populate("originalTeacher", "name email")
       .lean();
 
     // Build lookup set of existing lectures in Schedule documents to prevent double-display
@@ -207,7 +214,10 @@ export const listSchedules = async (req, res) => {
         teacher: bl.assignedTo,
         status: bl.completionStatus === "Completed" ? "Done" : (bl.completionStatus === "In Progress" ? "Scheduled" : "Planned"),
         homework: null,
-        isSaturdayLecture: false
+        isSaturdayLecture: false,
+        isTransferred: bl.isTransferred,
+        originalTeacher: bl.originalTeacher,
+        transferHistory: bl.transferHistory
       });
     }
 
@@ -241,13 +251,17 @@ export const getScheduleById = async (req, res) => {
       };
 
       if (role === "teacher") {
-        query.assignedTo = userId;
+        query.$or = [
+          { assignedTo: userId },
+          { originalTeacher: userId }
+        ];
       }
 
       const bls = await BatchLecture.find(query)
         .populate("batch", "batch_name batch_no")
         .populate("syllabus", "subject name")
         .populate("assignedTo", "name email")
+        .populate("originalTeacher", "name")
         .sort({ order: 1, dueDate: 1 })
         .lean();
 
@@ -269,7 +283,10 @@ export const getScheduleById = async (req, res) => {
           teacher: bl.assignedTo,
           status: bl.completionStatus === "Completed" ? "Done" : (bl.completionStatus === "In Progress" ? "Scheduled" : "Planned"),
           homework: null,
-          isSaturdayLecture: false
+          isSaturdayLecture: false,
+          isTransferred: bl.isTransferred,
+          originalTeacher: bl.originalTeacher,
+          transferHistory: bl.transferHistory
         })),
         verificationStatus: "approved",
         createdByRole: "admin",
@@ -282,7 +299,8 @@ export const getScheduleById = async (req, res) => {
     const schedule = await Schedule.findById(id)
       .populate("batch", "batch_name batch_no")
       .populate("teacher", "name email")
-      .populate("lectures.teacher", "name email");
+      .populate("lectures.teacher", "name email")
+      .populate("lectures.originalTeacher", "name");
 
     if (!schedule) {
       return res.status(404).json({ message: "Schedule not found" });
@@ -291,7 +309,10 @@ export const getScheduleById = async (req, res) => {
     // Role-based visibility validation
     if (role === "teacher") {
       const isPrimary = schedule.teacher._id.toString() === userId;
-      const isLectureTeacher = schedule.lectures.some(l => l.teacher && l.teacher._id.toString() === userId);
+      const isLectureTeacher = schedule.lectures.some(l => 
+        (l.teacher && l.teacher._id.toString() === userId) ||
+        (l.originalTeacher && l.originalTeacher._id.toString() === userId)
+      );
       if (!isPrimary && !isLectureTeacher) {
         return res.status(403).json({ message: "Access denied. This schedule is assigned to another teacher." });
       }
@@ -968,7 +989,7 @@ export const checkConflicts = async (req, res) => {
       .lean();
 
     for (const proposed of lectures) {
-      const { index, date, time_slot, teacher: teacherIdRaw, batchIds: lecBatchIds } = proposed;
+      const { index, date, time_slot, teacher: teacherIdRaw, batchIds: lecBatchIds, venue: proposedVenue } = proposed;
 
       if (!date || !time_slot) continue; // skip rows without date or time_slot
 
@@ -1038,6 +1059,58 @@ export const checkConflicts = async (req, res) => {
               });
             }
           }
+
+          // ─── Venue conflict ────────────────────────────────────────────
+          if (proposedVenue && exLec.venue) {
+            if (proposedVenue === exLec.venue) {
+              conflicts.push({
+                lectureIndex: index,
+                type: "venue",
+                conflictWith: {
+                  scheduleId: existing._id,
+                  subject: existing.subject,
+                  batchName: existing.batch?.batch_name,
+                  batchNo: existing.batch?.batch_no,
+                  existingTimeSlot: exLec.time_slot,
+                  existingDate: exDate,
+                  existingVenue: exLec.venue,
+                  existingLectureTitle: exLec.title
+                }
+              });
+            }
+          }
+        }
+      }
+    }
+
+    // Process Smart Venue Suggestions
+    // For every venue conflict, we need to know what other venues are occupied
+    const allVenues = ["Workspace 5", "Workspace 6", "Conference Room 1", "Conference Room 2", "Conference Room 3"];
+    
+    // Group conflicts by lectureIndex
+    for (const c of conflicts) {
+      if (c.type === "venue") {
+        // Compute occupied venues for this lecture's proposed date & time
+        const proposed = lectures.find(l => l.index === c.lectureIndex);
+        if (proposed) {
+          const proposedTime = parseTimeSlot(proposed.time_slot);
+          const proposedDate = new Date(proposed.date).toISOString().split("T")[0];
+          
+          const occupiedVenues = new Set();
+          for (const existing of existingSchedules) {
+            for (const exLec of existing.lectures || []) {
+              if (!exLec.date || !exLec.time_slot || !exLec.venue) continue;
+              const exTime = parseTimeSlot(exLec.time_slot);
+              if (!exTime) continue;
+              const exDate = new Date(exLec.date).toISOString().split("T")[0];
+              if (exDate !== proposedDate) continue;
+              if (overlaps(proposedTime, exTime)) {
+                occupiedVenues.add(exLec.venue);
+              }
+            }
+          }
+          const availableVenues = allVenues.filter(v => !occupiedVenues.has(v));
+          c.availableVenues = availableVenues;
         }
       }
     }
@@ -1052,6 +1125,161 @@ export const checkConflicts = async (req, res) => {
     });
 
     return res.status(200).json({ conflicts: unique });
+  } catch (err) {
+    return res.status(500).json({ message: err.message });
+  }
+};
+
+/**
+ * Transfer a scheduled lecture to another teacher
+ * Role: Admin, Teacher (only their own lectures)
+ */
+export const transferLecture = async (req, res) => {
+  try {
+    const { scheduleId, lectureId } = req.params;
+    const { newTeacherId, reason } = req.body;
+    const { role, id: userId } = req.user;
+
+    if (!newTeacherId) {
+      return res.status(400).json({ message: "New teacher ID is required." });
+    }
+
+    if (scheduleId.startsWith("batch_syllabus_")) {
+      const bl = await BatchLecture.findById(lectureId);
+      if (!bl) {
+        return res.status(404).json({ message: "Lecture not found." });
+      }
+
+      const currentTeacherId = String(bl.assignedTo);
+      if (role === "teacher" && currentTeacherId !== String(userId)) {
+        return res.status(403).json({ message: "Access denied. You can only transfer your own lectures." });
+      }
+
+      if (currentTeacherId === String(newTeacherId)) {
+        return res.status(400).json({ message: "Lecture is already assigned to this teacher." });
+      }
+
+      if (!bl.isTransferred) {
+        bl.originalTeacher = currentTeacherId;
+      }
+
+      bl.transferHistory.push({
+        oldTeacher: currentTeacherId,
+        newTeacher: newTeacherId,
+        date: new Date(),
+        reason: reason || ""
+      });
+
+      bl.assignedTo = newTeacherId;
+      bl.isTransferred = true;
+
+      await bl.save();
+
+      return res.status(200).json({ message: "Lecture transferred successfully." });
+    }
+
+    const schedule = await Schedule.findById(scheduleId);
+    if (!schedule) {
+      return res.status(404).json({ message: "Schedule not found." });
+    }
+
+    const lecture = schedule.lectures.id(lectureId);
+    if (!lecture) {
+      return res.status(404).json({ message: "Lecture not found." });
+    }
+
+    // Determine current teacher of the lecture
+    const currentTeacherId = String(lecture.teacher || schedule.teacher);
+
+    // Permission check for teacher
+    if (role === "teacher" && currentTeacherId !== String(userId)) {
+      return res.status(403).json({ message: "Access denied. You can only transfer your own lectures." });
+    }
+
+    if (currentTeacherId === String(newTeacherId)) {
+      return res.status(400).json({ message: "Lecture is already assigned to this teacher." });
+    }
+
+    // Validate conflicts for the new teacher
+    const parseTimeSlot = (slot) => {
+      if (!slot || typeof slot !== "string") return null;
+      const parts = slot.split("-");
+      if (parts.length !== 2) return null;
+      const toMinutes = (t) => {
+        const [h, m] = t.trim().split(":").map(Number);
+        if (isNaN(h) || isNaN(m)) return null;
+        return h * 60 + m;
+      };
+      const start = toMinutes(parts[0]);
+      const end = toMinutes(parts[1]);
+      if (start === null || end === null || end <= start) return null;
+      return { start, end };
+    };
+
+    const overlaps = (a, b) => a.start < b.end && b.start < a.end;
+
+    const proposedTime = parseTimeSlot(lecture.time_slot);
+    if (proposedTime && lecture.date) {
+      const proposedDate = new Date(lecture.date).toISOString().split("T")[0];
+
+      // Fetch existing schedules to check for overlap
+      // We look for schedules where any lecture is on the same date
+      const existingSchedules = await Schedule.find({
+        "lectures.date": {
+          $gte: new Date(proposedDate),
+          $lte: new Date(new Date(proposedDate).getTime() + 24 * 60 * 60 * 1000)
+        }
+      }).lean();
+
+      for (const existing of existingSchedules) {
+        for (const exLec of existing.lectures || []) {
+          // Check if newTeacher is teaching this lecture
+          const exLecTeacherId = String(exLec.teacher || existing.teacher);
+          if (exLecTeacherId !== String(newTeacherId)) continue;
+
+          // Skip the exact same lecture we are transferring
+          if (String(existing._id) === scheduleId && String(exLec._id) === lectureId) continue;
+
+          if (!exLec.date || !exLec.time_slot) continue;
+
+          const exTime = parseTimeSlot(exLec.time_slot);
+          if (!exTime) continue;
+
+          const exDate = new Date(exLec.date).toISOString().split("T")[0];
+          if (exDate !== proposedDate) continue;
+
+          if (overlaps(proposedTime, exTime)) {
+            return res.status(409).json({
+              message: "The selected teacher already has another lecture scheduled during this time. Please choose another teacher."
+            });
+          }
+        }
+      }
+    }
+
+    // Set originalTeacher if not already set (i.e. first transfer)
+    if (!lecture.isTransferred) {
+      lecture.originalTeacher = currentTeacherId;
+    }
+    
+    // Add to history
+    lecture.transferHistory.push({
+      originalTeacher: currentTeacherId,
+      newTeacher: newTeacherId,
+      transferredBy: userId,
+      transferredByRole: role,
+      transferredAt: new Date(),
+      reason: reason || ""
+    });
+
+    // Update assignment
+    lecture.teacher = newTeacherId;
+    lecture.isTransferred = true;
+
+    await schedule.save();
+
+    return res.status(200).json({ message: "Lecture transferred successfully." });
+
   } catch (err) {
     return res.status(500).json({ message: err.message });
   }

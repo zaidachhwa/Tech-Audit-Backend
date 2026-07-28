@@ -76,6 +76,19 @@ const batchLectureSchema = new mongoose.Schema(
       default: null
     },
 
+    venue: { type: String, default: "" },
+
+    isTransferred: { type: Boolean, default: false },
+    originalTeacher: { type: mongoose.Schema.Types.ObjectId, ref: "Teacher", default: null },
+    transferHistory: [
+      {
+        oldTeacher: { type: mongoose.Schema.Types.ObjectId, ref: "Teacher" },
+        newTeacher: { type: mongoose.Schema.Types.ObjectId, ref: "Teacher" },
+        date: { type: Date, default: Date.now },
+        reason: { type: String, default: "" }
+      }
+    ],
+
     studentsProgress: [
       {
         studentId: { type: mongoose.Schema.Types.ObjectId, ref: "Student" },

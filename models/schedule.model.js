@@ -22,6 +22,17 @@ const lectureSchema = new mongoose.Schema({
   },
   isSaturdayLecture: { type: Boolean, default: false },
   teacher: { type: mongoose.Schema.Types.ObjectId, ref: "Teacher" },
+  venue: { type: String, default: "" },
+  isTransferred: { type: Boolean, default: false },
+  originalTeacher: { type: mongoose.Schema.Types.ObjectId, ref: "Teacher", default: null },
+  transferHistory: [{
+    originalTeacher: { type: mongoose.Schema.Types.ObjectId, ref: "Teacher" },
+    newTeacher: { type: mongoose.Schema.Types.ObjectId, ref: "Teacher" },
+    transferredBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
+    transferredByRole: { type: String },
+    transferredAt: { type: Date, default: Date.now },
+    reason: { type: String, default: "" }
+  }],
   punchInTime: { type: Date, default: null },
   punchOutTime: { type: Date, default: null },
   punchInNotes: { type: String, default: "" },
