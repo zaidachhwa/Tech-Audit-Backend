@@ -1,4 +1,5 @@
 import Notification from "../models/notification.model.js";
+import { sendPushToUser } from "../services/pushNotification.service.js";
 
 export const createNotification = async (req, res) => {
   try {
@@ -13,6 +14,13 @@ export const createNotification = async (req, res) => {
       message,
       type: type || "General"
     });
+    
+    await sendPushToUser(userId, userModel, {
+       title: title,
+       body: message,
+       url: userModel === "Teacher" ? "/teacher/dashboard" : "/student/dashboard"
+    });
+
     res.status(201).json({ message: "Notification created", notification });
   } catch (err) {
     res.status(500).json({ message: err.message });

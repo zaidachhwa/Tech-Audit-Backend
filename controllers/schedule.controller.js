@@ -6,6 +6,7 @@ import { Submission } from "../models/submission.model.js";
 import { Announcement } from "../models/announcement.model.js";
 import { BatchLecture } from "../models/batchLecture.model.js";
 import { Lecture } from "../models/lecture.model.js";
+import { sendPushToBatch, sendPushToTeachers, sendPushToUser } from "../services/pushNotification.service.js";
 
 const validateTeacherConflicts = async (proposedLectures, currentScheduleId = null) => {
   const parseTimeSlot = (slot) => {
@@ -497,6 +498,27 @@ export const updateBatchLectureFromScheduler = async (req, res) => {
     }
 
     await batchLecture.save();
+    
+    if (teacherId !== undefined && String(teacherId) !== String(batchLecture.assignedTo)) {
+      // It's a teacher switch
+      const bObj = await Batch.findById(batchLecture.batch);
+      
+      // Notify new teacher
+      await sendPushToUser(teacherId, "Teacher", {
+        title: "Lecture Assigned",
+        body: `You have been assigned to teach ${batchLecture.title} for batch ${bObj?.batch_name}`,
+        url: "/teacher/schedule"
+      });
+      
+      // Notify students
+      if (bObj) {
+         await sendPushToBatch(bObj.batch_name, {
+           title: "Lecture Teacher Changed",
+           body: `The teacher for ${batchLecture.title} has been updated.`,
+           url: "/student/dashboard"
+         });
+      }
+    }
 
     // Sync back to template Lecture if exists
     if (batchLecture.templateLecture) {
@@ -631,6 +653,19 @@ export const updateSchedule = async (req, res) => {
       }
     }
 
+    // Detect Venue switches
+    const venueSwitches = [];
+    if (lectures && Array.isArray(lectures)) {
+      for (const lec of lectures) {
+        if (lec._id && !String(lec._id).startsWith("temp-")) {
+          const oldLec = schedule.lectures.id(lec._id);
+          if (oldLec && oldLec.venue && lec.venue && oldLec.venue !== lec.venue) {
+            venueSwitches.push(lec);
+          }
+        }
+      }
+    }
+
     if (lectures) {
       schedule.lectures = lectures;
     }
@@ -658,6 +693,32 @@ export const updateSchedule = async (req, res) => {
         }
       } catch (announceErr) {
         console.error("Failed to generate automated Saturday announcement on update:", announceErr);
+      }
+    }
+    
+    // Send Push Notifications for Venue Switches
+    if (venueSwitches.length > 0) {
+      try {
+        const batchObj = await Batch.findById(schedule.batch);
+        if (batchObj) {
+           for (const lec of venueSwitches) {
+             await sendPushToBatch(batchObj.batch_name, {
+               title: "Venue Changed",
+               body: `Venue for ${lec.title || "a lecture"} has been updated to ${lec.venue}.`,
+               url: "/student/dashboard"
+             });
+             // Notify teacher if there is a teacher assigned to this lecture
+             if (lec.teacher) {
+               await sendPushToUser(lec.teacher, "Teacher", {
+                 title: "Venue Changed",
+                 body: `Venue for ${lec.title || "a lecture"} has been updated to ${lec.venue}.`,
+                 url: "/teacher/schedule"
+               });
+             }
+           }
+        }
+      } catch (e) {
+        console.error("Error sending venue switch pushes:", e);
       }
     }
 

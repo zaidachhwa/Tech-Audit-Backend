@@ -5,6 +5,7 @@ import Report from "../models/report.model.js";
 import Student from "../models/student.model.js";
 import axios from "axios";
 import fs from "fs";
+import { sendPushToUser } from "../services/pushNotification.service.js";
 
 export const generateFeedback = async (req, res) => {
   try {
@@ -124,6 +125,15 @@ export const createReport = async (req, res) => {
       overallRemarks,
       auditDate,
     });
+    
+    if (report && report.student) {
+      await sendPushToUser(report.student, "Student", {
+        title: "Report Generated",
+        body: "Your new performance report has been generated.",
+        url: "/student/reports"
+      });
+    }
+
     return res.status(201).json({ message: "Report created", report });
   } catch (err) {
     return res.status(500).json({ message: err.message });
