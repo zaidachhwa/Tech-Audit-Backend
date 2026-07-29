@@ -229,6 +229,8 @@ export const listSchedules = async (req, res) => {
         { "lectures.transferHistory.originalTeacher": uid }
       ];
     } else if (role === "student") {
+      const student = await Student.findById(userId);
+      if (!student) return res.status(404).json({ message: "Student not found" });
 
       // Resolve student's Batch ObjectId
       const studentBatch = await Batch.findOne({
@@ -1663,3 +1665,43 @@ export const updateLectureVenue = async (req, res) => {
 
 
 
+
+export const deleteLecture = async (req, res) => {
+  try {
+    const { scheduleId, lectureId } = req.params;
+    const { id: userId, role } = req.user;
+
+    const schedule = await Schedule.findById(scheduleId);
+    if (!schedule) {
+      return res.status(404).json({ message: "This lecture has already been deleted. Please refresh the page." });
+    }
+
+    const lecture = schedule.lectures.id(lectureId);
+    if (!lecture) {
+      return res.status(404).json({ message: "This lecture has already been deleted. Please refresh the page." });
+    }
+
+    // Role check: Only admin or the assigned teacher
+    if (role === "teacher") {
+      const isLectureTeacher = String(lecture.teacher) === String(userId);
+      const isScheduleTeacher = String(schedule.teacher) === String(userId);
+      if (!isLectureTeacher && !isScheduleTeacher) {
+        return res.status(403).json({ message: "Access denied. You can only delete your own assigned lectures." });
+      }
+    }
+
+    // Remove lecture
+    schedule.lectures.pull(lectureId);
+
+    // If no lectures remain, delete the entire schedule document to avoid orphans
+    if (schedule.lectures.length === 0) {
+      await Schedule.findByIdAndDelete(scheduleId);
+    } else {
+      await schedule.save();
+    }
+
+    return res.status(200).json({ message: "Lecture deleted successfully." });
+  } catch (err) {
+    return res.status(500).json({ message: err.message });
+  }
+};

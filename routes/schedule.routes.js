@@ -5,6 +5,7 @@ import {
   getScheduleById,
   updateSchedule,
   deleteSchedule,
+  deleteLecture,
   saveHomework,
   getLectureSubmissions,
   submitHomework,
@@ -69,6 +70,7 @@ router.get("/:id/submissions", verifyToken, isAdminOrTeacher, getScheduleSubmiss
 router.get("/:id", verifyToken, getScheduleById);
 router.put("/update/:id", verifyToken, updateSchedule);
 router.delete("/delete/:id", verifyToken, isAdminOrTeacher, deleteSchedule);
+router.delete("/:scheduleId/lectures/:lectureId", verifyToken, isAdminOrTeacher, deleteLecture);
 router.patch("/:id/verify", verifyToken, isAdminOrTeacher, verifySchedule);
 
 export default router;
