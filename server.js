@@ -31,6 +31,7 @@ import lmsRoutes from "./routes/lms.routes.js";
 import gradeRoutes from "./routes/grade.routes.js";
 import punchRoutes from "./routes/punch.routes.js";
 import studentAttendanceRoutes from "./routes/studentAttendance.routes.js";
+import pushRoutes from "./routes/push.routes.js";
 import { errorHandler } from "./middleware/error.middleware.js";
 import {
   MONGODB_URL,
@@ -39,10 +40,12 @@ import {
   DEPLOYED_CORS_ORIGIN,
 } from "./config/env.js";
 
-
+import { initCronJobs } from "./services/cron.service.js";
 
 
 const app = express();
+// Initialize Cron Jobs
+initCronJobs();
 import path from "path";
 import { fileURLToPath } from "url";
 
@@ -144,6 +147,7 @@ app.use("/api/attendance", attendanceRoutes);
 app.use("/api/attendance/student", studentAttendanceRoutes);
 app.use("/api/grades", gradeRoutes);
 app.use("/api/grade", gradeRoutes); // compatibility
+app.use("/api/push", pushRoutes);
 // ERROR HANDLER
 app.use(errorHandler);
 

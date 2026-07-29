@@ -3,6 +3,7 @@ import { Student } from "../models/student.model.js";
 import Batch from "../models/batch.model.js";
 import { Schedule } from "../models/schedule.model.js";
 import { BatchLecture } from "../models/batchLecture.model.js";
+import { sendPushToUser } from "../services/pushNotification.service.js";
 
 /* ─── HELPERS ────────────────────────────────────────────────────────────── */
 
@@ -336,6 +337,13 @@ export const studentPunchOut = async (req, res) => {
     // Auto-calculate lecture attendance based on Punch IN and OUT times
     await recalcLectureAttendance(record);
     await record.save();
+    
+    // Notify student
+    await sendPushToUser(studentId, "Student", {
+      title: "Punched Out",
+      body: "You have successfully punched out.",
+      url: "/student/attendance"
+    });
 
     return res.json({ message: "Punched Out successfully!", record });
   } catch (err) {
@@ -486,6 +494,14 @@ export const adminEditPunchTime = async (req, res) => {
       .populate("student", "name email batch_name batch_no rollNo")
       .populate("batch", "batch_name batch_no")
       .lean();
+      
+    if (updated.student?._id) {
+       await sendPushToUser(updated.student._id, "Student", {
+         title: "Attendance Updated",
+         body: "Your attendance record was updated by an administrator.",
+         url: "/student/attendance"
+       });
+    }
 
     return res.json({ message: "Attendance record updated successfully.", record: updated });
   } catch (err) {

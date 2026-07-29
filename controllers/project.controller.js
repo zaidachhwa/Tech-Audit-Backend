@@ -2,6 +2,7 @@
 import Project from "../models/project.model.js";
 import Batch from "../models/batch.model.js";
 import { Student } from "../models/student.model.js";
+import { sendPushToBatch, sendPushToUser } from "../services/pushNotification.service.js";
 
 /* Assign project to batch (keeps your previous behavior) */
 export const assignProjectToBatch = async (req, res) => {
@@ -47,6 +48,13 @@ export const assignProjectToBatch = async (req, res) => {
       });
       createdProjects.push(project);
     }
+    
+    // Send Push
+    await sendPushToBatch(batch.batch_name, {
+      title: "New Project Assigned",
+      body: `You have a new project: ${title}`,
+      url: "/student/projects"
+    });
 
     return res
       .status(201)
@@ -105,6 +113,14 @@ export const createProject = async (req, res) => {
         await Student.findByIdAndUpdate(sId, { $push: { projects: project._id } });
         createdProjects.push(project);
       }
+      
+      // Send Push
+      await sendPushToBatch(batch.batch_name, {
+        title: "New Project Assigned",
+        body: `You have a new project: ${title}`,
+        url: "/student/projects"
+      });
+
       return res.status(201).json({ message: "Projects created for batch", projects: createdProjects });
     }
 
@@ -128,6 +144,13 @@ export const createProject = async (req, res) => {
     // push to student's projects array
     await Student.findByIdAndUpdate(finalStudentId, {
       $push: { projects: project._id },
+    });
+    
+    // Send Push
+    await sendPushToUser(finalStudentId, "Student", {
+       title: "New Project Assigned",
+       body: `You have a new project: ${title}`,
+       url: "/student/projects"
     });
 
     const populatedProject = await Project.findById(project._id)

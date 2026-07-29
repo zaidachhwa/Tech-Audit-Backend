@@ -2,6 +2,7 @@ import Homework from "../models/homework.model.js";
 import { Student } from "../models/student.model.js";
 import Batch from "../models/batch.model.js";
 import mongoose from "mongoose";
+import { sendPushToBatch } from "../services/pushNotification.service.js";
 
 // Normalize batch names
 const cleanBatchName = (name) => name?.replace(/\s+/g, "").toUpperCase();
@@ -87,6 +88,23 @@ export const createHomework = async (req, res) => {
     });
 
     await Promise.all(homeworkPromises);
+
+    // Send Push Notification
+    for (const batchDoc of Object.values(batchMap)) {
+       if(batchDoc?.batch_name) {
+          // A bit inefficient if multiple students map to same batch, but we can deduplicate batch names.
+       }
+    }
+    
+    // Better way: get unique batch names
+    const uniqueBatchNames = [...new Set(Object.values(batchMap).map(b => b.batch_name).filter(Boolean))];
+    for (const bName of uniqueBatchNames) {
+      await sendPushToBatch(bName, {
+         title: "New Homework Assigned",
+         body: `You have new homework: ${title}`,
+         url: "/student/homework"
+      });
+    }
 
     res.status(201).json({ message: `Homework assigned to ${studentIds.length} students` });
   } catch (err) {
