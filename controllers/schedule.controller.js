@@ -26,6 +26,35 @@ export const createSchedule = async (req, res) => {
       return res.status(404).json({ message: "Target Batch not found." });
     }
 
+    // Past Date & Past Time Validation
+    if (lectures && Array.isArray(lectures)) {
+      const now = new Date();
+      const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+
+      for (let i = 0; i < lectures.length; i++) {
+        const l = lectures[i];
+        if (!l.date) continue;
+        
+        const [year, month, day] = l.date.split('-').map(Number);
+        const lecDate = new Date(year, month - 1, day);
+
+        if (lecDate < today) {
+          return res.status(400).json({ message: `Cannot schedule lectures for a past date (Row ${i + 1}). Please select today or a future date.` });
+        }
+
+        if (lecDate.getTime() === today.getTime() && l.time_slot) {
+          const startStr = l.time_slot.includes('-') ? l.time_slot.split('-')[0].trim() : l.time_slot.trim();
+          if (startStr && startStr.includes(':')) {
+            const [hours, minutes] = startStr.split(':').map(Number);
+            const lecTime = new Date(today.getFullYear(), today.getMonth(), today.getDate(), hours, minutes);
+            if (lecTime < now) {
+              return res.status(400).json({ message: `Cannot schedule lectures in the past (Row ${i + 1}). Please select a future time.` });
+            }
+          }
+        }
+      }
+    }
+
     const newSchedule = await Schedule.create({
       subject,
       batch,
@@ -436,6 +465,51 @@ export const updateSchedule = async (req, res) => {
       const isUnassignedOrPending = !schedule.teacher || schedule.verificationStatus === "pending_teacher" || schedule.verificationStatus === "pending";
       if (!isPrimary && !isLectureTeacher && !isUnassignedOrPending) {
         return res.status(403).json({ message: "Access denied. You can only edit your own schedules." });
+      }
+    }
+
+    // Past Date & Past Time Validation
+    if (lectures && Array.isArray(lectures)) {
+      const now = new Date();
+      const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+
+      for (let i = 0; i < lectures.length; i++) {
+        const l = lectures[i];
+        if (!l.date) continue;
+
+        let isNewOrChanged = true;
+        if (l._id && !String(l._id).startsWith("temp-")) {
+          const oldLec = schedule.lectures.id(l._id);
+          if (oldLec) {
+            const oldDate = oldLec.date ? new Date(oldLec.date).toISOString().split('T')[0] : "";
+            const newDate = l.date ? new Date(l.date).toISOString().split('T')[0] : "";
+            const oldTime = oldLec.time_slot || "";
+            const newTime = l.time_slot || "";
+            if (oldDate === newDate && oldTime === newTime) {
+              isNewOrChanged = false;
+            }
+          }
+        }
+
+        if (isNewOrChanged) {
+          const [year, month, day] = l.date.split('-').map(Number);
+          const lecDate = new Date(year, month - 1, day);
+
+          if (lecDate < today) {
+            return res.status(400).json({ message: `Cannot schedule lectures for a past date (Row ${i + 1}). Please select today or a future date.` });
+          }
+
+          if (lecDate.getTime() === today.getTime() && l.time_slot) {
+            const startStr = l.time_slot.includes('-') ? l.time_slot.split('-')[0].trim() : l.time_slot.trim();
+            if (startStr && startStr.includes(':')) {
+              const [hours, minutes] = startStr.split(':').map(Number);
+              const lecTime = new Date(today.getFullYear(), today.getMonth(), today.getDate(), hours, minutes);
+              if (lecTime < now) {
+                return res.status(400).json({ message: `Cannot schedule lectures in the past (Row ${i + 1}). Please select a future time.` });
+              }
+            }
+          }
+        }
       }
     }
 
