@@ -7,6 +7,7 @@ import { Announcement } from "../models/announcement.model.js";
 import { BatchLecture } from "../models/batchLecture.model.js";
 import { Lecture } from "../models/lecture.model.js";
 import { sendPushToBatch, sendPushToTeachers, sendPushToUser } from "../services/pushNotification.service.js";
+import { notifyParents } from "../services/parentNotification.service.js";
 
 /**
  * Create a new Lecture Schedule
@@ -421,6 +422,10 @@ export const updateBatchLectureFromScheduler = async (req, res) => {
            body: `The teacher for ${batchLecture.title} has been updated.`,
            url: "/student/dashboard"
          });
+         
+         if (bObj.students && bObj.students.length > 0) {
+           await notifyParents(bObj.students, "Lecture Update", `The teacher for ${batchLecture.title} has been changed.`);
+         }
       }
     }
 
@@ -595,6 +600,10 @@ export const updateSchedule = async (req, res) => {
                body: `Venue for ${lec.title || "a lecture"} has been updated to ${lec.venue}.`,
                url: "/student/dashboard"
              });
+             
+             if (batchObj.students && batchObj.students.length > 0) {
+               await notifyParents(batchObj.students, "Lecture Venue Changed", `Venue for ${lec.title || "a lecture"} has been updated to ${lec.venue}.`);
+             }
              // Notify teacher if there is a teacher assigned to this lecture
              if (lec.teacher) {
                await sendPushToUser(lec.teacher, "Teacher", {

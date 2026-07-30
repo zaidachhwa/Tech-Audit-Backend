@@ -82,3 +82,49 @@ export const sendStudentCredentials = async (email, name, password) => {
     return { success: false, error: error.message };
   }
 };
+
+/**
+ * Generic function to send an email.
+ * @param {Object} options - { to, subject, html }
+ */
+export const sendEmail = async ({ to, subject, html }) => {
+  const host = process.env.EMAIL_HOST;
+  const port = process.env.EMAIL_PORT;
+  const user = process.env.EMAIL_USER;
+  const pass = process.env.EMAIL_PASS;
+  
+  let from = process.env.EMAIL_FROM || '"Tech Audit Portal" <no-reply@tech-audit.com>';
+  if (from && !from.includes("<") && !from.includes("@")) {
+    from = `"${from.replace(/"/g, '')}" <${user}>`;
+  }
+
+  if (!host || !user || !pass) {
+    console.log(`⚠️ SMTP not configured. Simulated Email to ${to}: ${subject}`);
+    return { success: false, simulated: true };
+  }
+
+  const transporter = nodemailer.createTransport({
+    host,
+    port: parseInt(port) || 587,
+    secure: process.env.EMAIL_SECURE === "true",
+    auth: {
+      user,
+      pass,
+    },
+  });
+
+  const mailOptions = {
+    from,
+    to,
+    subject,
+    html,
+  };
+
+  try {
+    await transporter.sendMail(mailOptions);
+    return { success: true };
+  } catch (error) {
+    console.error(`Failed to send email to ${to}:`, error);
+    throw error;
+  }
+};

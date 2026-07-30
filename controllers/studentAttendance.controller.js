@@ -4,6 +4,7 @@ import Batch from "../models/batch.model.js";
 import { Schedule } from "../models/schedule.model.js";
 import { BatchLecture } from "../models/batchLecture.model.js";
 import { sendPushToUser } from "../services/pushNotification.service.js";
+import { notifyParents } from "../services/parentNotification.service.js";
 
 /* ─── HELPERS ────────────────────────────────────────────────────────────── */
 
@@ -345,6 +346,17 @@ export const studentPunchOut = async (req, res) => {
       url: "/student/attendance"
     });
 
+    // Notify Parents with daily summary
+    let parentMsg = `Attendance Summary for ${today.toDateString()}:\n`;
+    if (record.lectureAttendance && record.lectureAttendance.length > 0) {
+      record.lectureAttendance.forEach(lec => {
+        parentMsg += `- ${lec.lectureTitle} (${lec.timeSlot}): ${lec.status}\n`;
+      });
+    } else {
+      parentMsg += "Student punched in and out successfully today.";
+    }
+    await notifyParents([studentId], "Daily Attendance Summary", parentMsg);
+
     return res.json({ message: "Punched Out successfully!", record });
   } catch (err) {
     console.error("Punch Out Error:", err);
@@ -498,9 +510,17 @@ export const adminEditPunchTime = async (req, res) => {
     if (updated.student?._id) {
        await sendPushToUser(updated.student._id, "Student", {
          title: "Attendance Updated",
-         body: "Your attendance record was updated by an administrator.",
+         body: "An admin has updated your attendance record.",
          url: "/student/attendance"
        });
+       
+       let parentMsg = `An admin has updated the attendance for ${updated.date ? new Date(updated.date).toDateString() : "the day"}.\n`;
+       if (updated.lectureAttendance && updated.lectureAttendance.length > 0) {
+         updated.lectureAttendance.forEach(lec => {
+           parentMsg += `- ${lec.lectureTitle} (${lec.timeSlot}): ${lec.status}\n`;
+         });
+       }
+       await notifyParents([updated.student._id], "Attendance Updated", parentMsg);
     }
 
     return res.json({ message: "Attendance record updated successfully.", record: updated });

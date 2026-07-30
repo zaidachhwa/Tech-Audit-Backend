@@ -3,6 +3,7 @@ import { Student } from "../models/student.model.js";
 import Batch from "../models/batch.model.js";
 import mongoose from "mongoose";
 import { sendPushToBatch } from "../services/pushNotification.service.js";
+import { notifyParents } from "../services/parentNotification.service.js";
 
 // Normalize batch names
 const cleanBatchName = (name) => name?.replace(/\s+/g, "").toUpperCase();
@@ -104,6 +105,10 @@ export const createHomework = async (req, res) => {
          body: `You have new homework: ${title}`,
          url: "/student/homework"
       });
+    }
+
+    if (studentIds.length > 0) {
+      await notifyParents(studentIds, "New Homework Assigned", `New homework has been assigned: ${title}. Due date: ${new Date(dueDate).toDateString()}`);
     }
 
     res.status(201).json({ message: `Homework assigned to ${studentIds.length} students` });

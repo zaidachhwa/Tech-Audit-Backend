@@ -1,6 +1,7 @@
 import { Announcement } from "../models/announcement.model.js";
 import { Student } from "../models/student.model.js";
 import { sendPushToBatch } from "../services/pushNotification.service.js";
+import { notifyParents } from "../services/parentNotification.service.js";
 
 export const createAnnouncement = async (req, res) => {
   try {
@@ -28,7 +29,7 @@ export const createAnnouncement = async (req, res) => {
 
     const announcement = await Announcement.create(payload);
 
-    if (payload.targetAudience === "Students") {
+    if (payload.targetAudience === "Students" || payload.targetAudience === "Both") {
       // Notify students in the batch
       if (batch && batch !== "All Batches") {
         await sendPushToBatch(batch, {
@@ -36,8 +37,27 @@ export const createAnnouncement = async (req, res) => {
           body: message,
           url: "/student/announcements"
         });
+        
+        // Notify parents in the batch
+        import("../models/batch.model.js").then(async ({ default: Batch }) => {
+          const b = await Batch.findById(batch).lean();
+          if (b && b.students && b.students.length > 0) {
+            await notifyParents(b.students, `New Announcement: ${title}`, message);
+          }
+        }).catch(console.error);
+      } else {
+        // All Batches
+        import("../models/student.model.js").then(async ({ Student: StudentModel }) => {
+          const allStudents = await StudentModel.find({ isActive: true }).select("_id").lean();
+          const studentIds = allStudents.map(s => s._id);
+          if (studentIds.length > 0) {
+            await notifyParents(studentIds, `New Announcement: ${title}`, message);
+          }
+        }).catch(console.error);
       }
-    } else if (payload.targetAudience === "Teachers") {
+    } 
+    
+    if (payload.targetAudience === "Teachers" || payload.targetAudience === "Both") {
       // If a specific teacher is targeted, notify them directly. 
       // If targetTeacher is not provided, we could notify all teachers, but maybe we don't have a "sendPushToAllTeachers" method. 
       // Assuming sendPushToUser works for single users.

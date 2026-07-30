@@ -12,6 +12,8 @@ const studentSchema = new mongoose.Schema(
     projects: [{ type: mongoose.Schema.Types.ObjectId, ref: "Project" }],
     role: { type: String, default: "student" },
     phoneNo: { type: String, default: "" },
+    parentEmail: { type: String, default: "" },
+    parentPhoneNo: { type: String, default: "" },
     enrollmentNo: { type: String, default: "" },
     rollNo: { type: String, default: "" },
     course: { type: String, default: "" },

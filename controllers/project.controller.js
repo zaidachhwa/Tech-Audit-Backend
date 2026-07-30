@@ -3,6 +3,7 @@ import Project from "../models/project.model.js";
 import Batch from "../models/batch.model.js";
 import { Student } from "../models/student.model.js";
 import { sendPushToBatch, sendPushToUser } from "../services/pushNotification.service.js";
+import { notifyParents } from "../services/parentNotification.service.js";
 
 /* Assign project to batch (keeps your previous behavior) */
 export const assignProjectToBatch = async (req, res) => {
@@ -55,6 +56,10 @@ export const assignProjectToBatch = async (req, res) => {
       body: `You have a new project: ${title}`,
       url: "/student/projects"
     });
+    
+    if (batch.students && batch.students.length > 0) {
+      await notifyParents(batch.students, "New Project Assigned", `A new project has been assigned: ${title}. Due date: ${new Date(dueDate).toDateString()}`);
+    }
 
     return res
       .status(201)
@@ -120,6 +125,10 @@ export const createProject = async (req, res) => {
         body: `You have a new project: ${title}`,
         url: "/student/projects"
       });
+      
+      if (batch.students && batch.students.length > 0) {
+        await notifyParents(batch.students, "New Project Assigned", `A new project has been assigned: ${title}. Due date: ${new Date(dueDate).toDateString()}`);
+      }
 
       return res.status(201).json({ message: "Projects created for batch", projects: createdProjects });
     }
@@ -152,6 +161,8 @@ export const createProject = async (req, res) => {
        body: `You have a new project: ${title}`,
        url: "/student/projects"
     });
+    
+    await notifyParents([finalStudentId], "New Project Assigned", `A new project has been assigned: ${title}. Due date: ${new Date(dueDate).toDateString()}`);
 
     const populatedProject = await Project.findById(project._id)
       .populate("batch", "batch_name batch_no")

@@ -4,6 +4,7 @@ import Project from "../models/project.model.js";
 import { Schedule } from "../models/schedule.model.js";
 import { BatchLecture } from "../models/batchLecture.model.js";
 import { sendPushToBatch, sendPushToUser } from "./pushNotification.service.js";
+import { notifyParents } from "./parentNotification.service.js";
 
 function parseTimeSlot(timeSlot) {
   if (!timeSlot) return null;
@@ -126,14 +127,24 @@ export const initCronJobs = () => {
         },
       });
 
+      const parentNotifs = [];
+      const studentIds = [];
+
       for (const hw of dueHomeworks) {
-        if (hw.batch_name) {
-          await sendPushToBatch(hw.batch_name, {
+        if (hw.student) {
+          studentIds.push(hw.student);
+        }
+        if (hw.batchName) {
+          await sendPushToBatch(hw.batchName, {
             title: "Homework Due Soon",
             body: `Your homework "${hw.title}" is due in less than 3 hours!`,
             url: `/student/homework`
           });
         }
+      }
+      
+      if (studentIds.length > 0) {
+        await notifyParents(studentIds, "Homework Due Soon", "A homework assignment is due in less than 3 hours.");
       }
     } catch (error) {
       console.error("Error in homework due cron:", error);
@@ -151,16 +162,25 @@ export const initCronJobs = () => {
           $gte: now,
           $lte: next24Hours,
         },
-      });
+      }).populate('batch');
+
+      const studentIds = [];
 
       for (const project of dueProjects) {
-        if (project.batch_name) {
-          await sendPushToBatch(project.batch_name, {
+        if (project.assignedTo) {
+          studentIds.push(project.assignedTo);
+        }
+        if (project.batch && project.batch.batch_name) {
+          await sendPushToBatch(project.batch.batch_name, {
             title: "Project Due Tomorrow",
             body: `Your project "${project.title}" is due tomorrow!`,
             url: `/student/projects`
           });
         }
+      }
+      
+      if (studentIds.length > 0) {
+        await notifyParents(studentIds, "Project Due Tomorrow", "A project assignment is due tomorrow.");
       }
     } catch (error) {
       console.error("Error in project due cron:", error);

@@ -80,6 +80,10 @@ export const bulkImportStudents = async (req, res) => {
     const nameIndex = headers.indexOf("name");
     const emailIndex = headers.indexOf("email");
     const phoneIndex = headers.indexOf("phone");
+    let parentEmailIndex = headers.indexOf("parent email");
+    if (parentEmailIndex === -1) parentEmailIndex = headers.indexOf("parentemail");
+    let parentPhoneIndex = headers.indexOf("parent phone");
+    if (parentPhoneIndex === -1) parentPhoneIndex = headers.indexOf("parentphone");
 
     if (nameIndex === -1 || emailIndex === -1) {
       return res.status(400).json({
@@ -129,6 +133,8 @@ export const bulkImportStudents = async (req, res) => {
       const name = row[nameIndex]?.trim() || "";
       const email = row[emailIndex]?.trim() || "";
       const phone = phoneIndex !== -1 ? (row[phoneIndex]?.trim() || "") : "";
+      const parentEmail = parentEmailIndex !== -1 ? (row[parentEmailIndex] || "").trim().toLowerCase() : "";
+      const parentPhoneNo = parentPhoneIndex !== -1 ? (row[parentPhoneIndex] || "").trim() : "";
 
       // Name and Email are mandatory
       if (!name || !email) {
@@ -231,6 +237,8 @@ export const bulkImportStudents = async (req, res) => {
         password: hashedPassword,
         batch_name,
         batch_no,
+        parentEmail,
+        parentPhoneNo,
         customFields: studentCustomFields,
         isActive: true // Automatically approved when added by admin
       });

@@ -6,6 +6,7 @@ import Student from "../models/student.model.js";
 import axios from "axios";
 import fs from "fs";
 import { sendPushToUser } from "../services/pushNotification.service.js";
+import { notifyParents } from "../services/parentNotification.service.js";
 
 export const generateFeedback = async (req, res) => {
   try {
@@ -132,6 +133,8 @@ export const createReport = async (req, res) => {
         body: "Your new performance report has been generated.",
         url: "/student/reports"
       });
+      
+      await notifyParents([report.student], "New Performance Report", "A new performance report has been generated. Please review it on the portal.");
     }
 
     return res.status(201).json({ message: "Report created", report });

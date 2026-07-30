@@ -31,6 +31,8 @@ export const registerStudent = async (req, res) => {
       department,
       dob,
       gender,
+      parentEmail,
+      parentPhoneNo,
       profilePhoto,
       idCardPhoto,
       aadhaarPhoto,
@@ -86,6 +88,8 @@ export const registerStudent = async (req, res) => {
       department: department || "",
       dob: dob || "",
       gender: gender || "",
+      parentEmail: parentEmail || "",
+      parentPhoneNo: parentPhoneNo || "",
       profilePhoto: profilePhoto || "",
       idCardPhoto: idCardPhoto || "",
       aadhaarPhoto: aadhaarPhoto || "",
@@ -454,7 +458,7 @@ export const deleteStudent = async (req, res) => {
 export const updateStudent = async (req, res) => {
   try {
     const { id } = req.params;
-    const { name, email, password, batch_name, batch_no, phoneNo, isActive, customFields } = req.body;
+    const { name, email, password, batch_name, batch_no, phoneNo, parentEmail, parentPhoneNo, isActive, customFields } = req.body;
 
     const student = await Student.findById(id);
     if (!student)
@@ -477,6 +481,8 @@ export const updateStudent = async (req, res) => {
     if (batch_name) student.batch_name = batch_name;
     if (batch_no !== undefined) student.batch_no = batch_no;
     if (phoneNo !== undefined) student.phoneNo = phoneNo;
+    if (parentEmail !== undefined) student.parentEmail = parentEmail;
+    if (parentPhoneNo !== undefined) student.parentPhoneNo = parentPhoneNo;
     if (isActive !== undefined) student.isActive = isActive;
     if (customFields) {
       student.customFields = { ...student.customFields, ...customFields };
