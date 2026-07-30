@@ -9,10 +9,94 @@ import { Lecture } from "../models/lecture.model.js";
 import { sendPushToBatch, sendPushToTeachers, sendPushToUser } from "../services/pushNotification.service.js";
 import { notifyParents } from "../services/parentNotification.service.js";
 
+const validateTeacherConflicts = async (proposedLectures, currentScheduleId = null) => {
+  const parseTimeSlot = (slot) => {
+    if (!slot || typeof slot !== "string") return null;
+    const parts = slot.split("-");
+    if (parts.length !== 2) return null;
+    const toMinutes = (t) => {
+      const [h, m] = t.trim().split(":").map(Number);
+      if (isNaN(h) || isNaN(m)) return null;
+      return h * 60 + m;
+    };
+    const start = toMinutes(parts[0]);
+    const end = toMinutes(parts[1]);
+    if (start === null || end === null || end <= start) return null;
+    return { start, end };
+  };
+
+  const overlaps = (a, b) => a.start < b.end && b.start < a.end;
+
+  const query = {};
+  if (currentScheduleId) {
+    query._id = { $ne: currentScheduleId };
+  }
+
+  const existingSchedules = await Schedule.find(query)
+    .select("subject batch teacher lectures")
+    .populate("batch", "batch_name batch_no")
+    .populate("teacher", "name")
+    .populate("lectures.teacher", "name")
+    .lean();
+
+  for (const proposed of proposedLectures) {
+    const { date, time_slot, teacherIdRaw } = proposed;
+
+    if (!date || !time_slot) continue; 
+    const proposedTime = parseTimeSlot(time_slot);
+    if (!proposedTime) continue;
+    const proposedDate = new Date(date).toISOString().split("T")[0];
+    const proposedTeacherId = String(teacherIdRaw || "");
+    if (!proposedTeacherId) continue;
+
+    for (const existing of existingSchedules) {
+      for (const exLec of existing.lectures || []) {
+        // Skip current lecture being edited if it matches exactly
+        if (proposed.currentLectureId && String(exLec._id) === String(proposed.currentLectureId)) continue;
+        
+        if (!exLec.date || !exLec.time_slot) continue;
+
+        const exTime = parseTimeSlot(exLec.time_slot);
+        if (!exTime) continue;
+
+        const exDate = new Date(exLec.date).toISOString().split("T")[0];
+        if (exDate !== proposedDate) continue;
+        if (!overlaps(proposedTime, exTime)) continue;
+
+        const exTeacherId = typeof exLec.teacher === "object"
+          ? (exLec.teacher?._id?.toString() || "")
+          : (exLec.teacher?.toString() || "");
+
+        const scheduleTeacherId = typeof existing.teacher === "object"
+          ? (existing.teacher?._id?.toString() || "")
+          : (existing.teacher?.toString() || "");
+
+        const actualTeacherId = exTeacherId || scheduleTeacherId;
+
+        if (actualTeacherId && actualTeacherId === proposedTeacherId) {
+          return {
+            hasConflict: true,
+            conflictDetails: {
+              teacherName: exLec.teacher?.name || existing.teacher?.name || "Unknown Teacher",
+              subject: existing.subject,
+              date: exDate,
+              time: exLec.time_slot,
+              batch: existing.batch?.batch_name ? `${existing.batch.batch_name} ${existing.batch.batch_no ? '#' + existing.batch.batch_no : ''}` : "Unknown Batch"
+            }
+          };
+        }
+      }
+    }
+  }
+  
+  return { hasConflict: false };
+};
+
 /**
  * Create a new Lecture Schedule
  * Role: Admin
  */
+
 export const createSchedule = async (req, res) => {
   try {
     const { subject, batch, teacher, lectures } = req.body;
@@ -36,7 +120,10 @@ export const createSchedule = async (req, res) => {
         const l = lectures[i];
         if (!l.date) continue;
         
-        const [year, month, day] = l.date.split('-').map(Number);
+        const parts = l.date.split('-');
+        const year = parseInt(parts[0], 10);
+        const month = parseInt(parts[1], 10);
+        const day = parseInt(parts[2], 10);
         const lecDate = new Date(year, month - 1, day);
 
         if (lecDate < today) {
@@ -46,13 +133,31 @@ export const createSchedule = async (req, res) => {
         if (lecDate.getTime() === today.getTime() && l.time_slot) {
           const startStr = l.time_slot.includes('-') ? l.time_slot.split('-')[0].trim() : l.time_slot.trim();
           if (startStr && startStr.includes(':')) {
-            const [hours, minutes] = startStr.split(':').map(Number);
+            const timeParts = startStr.split(':');
+            const hours = parseInt(timeParts[0], 10);
+            const minutes = parseInt(timeParts[1], 10);
             const lecTime = new Date(today.getFullYear(), today.getMonth(), today.getDate(), hours, minutes);
             if (lecTime < now) {
               return res.status(400).json({ message: `Cannot schedule lectures in the past (Row ${i + 1}). Please select a future time.` });
             }
           }
         }
+      }
+    }
+
+    // Teacher Conflict Validation (Double Booking Check)
+    if (lectures && Array.isArray(lectures)) {
+      const proposedLectures = lectures.map(l => ({
+        date: l.date,
+        time_slot: l.time_slot,
+        teacherIdRaw: l.teacher || teacher
+      }));
+      const conflictCheck = await validateTeacherConflicts(proposedLectures);
+      if (conflictCheck.hasConflict) {
+        return res.status(409).json({
+          message: "This teacher is already assigned to another lecture during the selected date and time. Please select another teacher or choose a different time slot.",
+          conflictDetails: conflictCheck.conflictDetails
+        });
       }
     }
 
@@ -110,30 +215,23 @@ export const createSchedule = async (req, res) => {
     return res.status(500).json({ message: err.message });
   }
 };
-
-/**
- * List Lecture Schedules based on user role
- * Role: Admin, Teacher, Student
- */
 export const listSchedules = async (req, res) => {
   try {
     const { role, id: userId } = req.user;
     let query = {};
 
     if (role === "teacher") {
-      // Teachers see schedules where they are primary teacher OR assigned to any lecture OR were the original teacher before transfer
+      const mongoose = await import("mongoose");
+      const uid = new mongoose.default.Types.ObjectId(userId);
       query.$or = [
-        { teacher: userId },
-        { "lectures.teacher": userId },
-        { "lectures.originalTeacher": userId },
-        { "lectures.transferHistory.originalTeacher": userId }
+        { teacher: uid },
+        { "lectures.teacher": uid },
+        { "lectures.originalTeacher": uid },
+        { "lectures.transferHistory.originalTeacher": uid }
       ];
     } else if (role === "student") {
-      // Students only see schedules matching their enrolled Batch AND that are approved
-      const student = await Student.findById(userId).lean();
-      if (!student) {
-        return res.status(404).json({ message: "Student account not found." });
-      }
+      const student = await Student.findById(userId);
+      if (!student) return res.status(404).json({ message: "Student not found" });
 
       // Resolve student's Batch ObjectId
       const studentBatch = await Batch.findOne({
@@ -518,6 +616,22 @@ export const updateSchedule = async (req, res) => {
       }
     }
 
+    // Teacher Conflict Validation (Double Booking Check)
+    if (lectures && Array.isArray(lectures)) {
+      const proposedLectures = lectures.map(l => ({
+        date: l.date,
+        time_slot: l.time_slot,
+        teacherIdRaw: l.teacher || teacher,
+        currentLectureId: l._id && !String(l._id).startsWith("temp-") ? l._id : null
+      }));
+      const conflictCheck = await validateTeacherConflicts(proposedLectures);
+      if (conflictCheck.hasConflict) {
+        return res.status(409).json({
+          message: "This teacher is already assigned to another lecture during the selected date and time. Please select another teacher or choose a different time slot.",
+          conflictDetails: conflictCheck.conflictDetails
+        });
+      }
+    }
     // Apply updates
     if (subject) schedule.subject = subject;
     if (batch) schedule.batch = batch;
@@ -1164,7 +1278,7 @@ export const checkConflicts = async (req, res) => {
           if (exDate !== proposedDate) continue;
           if (!overlaps(proposedTime, exTime)) continue;
 
-          // ─── Batch conflict ─────────────────────────────────────────────
+          // Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬ Batch conflict Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
           if (proposedBatchIds.has(existingBatchId)) {
             conflicts.push({
               lectureIndex: index,
@@ -1181,7 +1295,7 @@ export const checkConflicts = async (req, res) => {
             });
           }
 
-          // ─── Teacher conflict ────────────────────────────────────────────
+          // Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬ Teacher conflict Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
           if (proposedTeacherId) {
             const exTeacherId = typeof exLec.teacher === "object"
               ? (exLec.teacher?._id?.toString() || "")
@@ -1204,7 +1318,7 @@ export const checkConflicts = async (req, res) => {
             }
           }
 
-          // ─── Venue conflict ────────────────────────────────────────────
+          // Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬ Venue conflict Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
           if (proposedVenue && exLec.venue) {
             if (proposedVenue === exLec.venue) {
               conflicts.push({
@@ -1344,63 +1458,21 @@ export const transferLecture = async (req, res) => {
       return res.status(400).json({ message: "Lecture is already assigned to this teacher." });
     }
 
-    // Validate conflicts for the new teacher
-    const parseTimeSlot = (slot) => {
-      if (!slot || typeof slot !== "string") return null;
-      const parts = slot.split("-");
-      if (parts.length !== 2) return null;
-      const toMinutes = (t) => {
-        const [h, m] = t.trim().split(":").map(Number);
-        if (isNaN(h) || isNaN(m)) return null;
-        return h * 60 + m;
-      };
-      const start = toMinutes(parts[0]);
-      const end = toMinutes(parts[1]);
-      if (start === null || end === null || end <= start) return null;
-      return { start, end };
-    };
-
-    const overlaps = (a, b) => a.start < b.end && b.start < a.end;
-
-    const proposedTime = parseTimeSlot(lecture.time_slot);
-    if (proposedTime && lecture.date) {
-      const proposedDate = new Date(lecture.date).toISOString().split("T")[0];
-
-      // Fetch existing schedules to check for overlap
-      // We look for schedules where any lecture is on the same date
-      const existingSchedules = await Schedule.find({
-        "lectures.date": {
-          $gte: new Date(proposedDate),
-          $lte: new Date(new Date(proposedDate).getTime() + 24 * 60 * 60 * 1000)
-        }
-      }).lean();
-
-      for (const existing of existingSchedules) {
-        for (const exLec of existing.lectures || []) {
-          // Check if newTeacher is teaching this lecture
-          const exLecTeacherId = String(exLec.teacher || existing.teacher);
-          if (exLecTeacherId !== String(newTeacherId)) continue;
-
-          // Skip the exact same lecture we are transferring
-          if (String(existing._id) === scheduleId && String(exLec._id) === lectureId) continue;
-
-          if (!exLec.date || !exLec.time_slot) continue;
-
-          const exTime = parseTimeSlot(exLec.time_slot);
-          if (!exTime) continue;
-
-          const exDate = new Date(exLec.date).toISOString().split("T")[0];
-          if (exDate !== proposedDate) continue;
-
-          if (overlaps(proposedTime, exTime)) {
-            return res.status(409).json({
-              message: "The selected teacher already has another lecture scheduled during this time. Please choose another teacher."
-            });
-          }
-        }
-      }
+    // Teacher Conflict Validation (Double Booking Check)
+    const proposedLectures = [{
+      date: lecture.date,
+      time_slot: lecture.time_slot,
+      teacherIdRaw: newTeacherId,
+      currentLectureId: lecture._id
+    }];
+    
+    const conflictCheck = await validateTeacherConflicts(proposedLectures);
+    if (conflictCheck.hasConflict) {
+      return res.status(409).json({
+        message: "This teacher is already assigned to another lecture during the selected date and time. Please select another teacher or choose a different time slot.",
+        conflictDetails: conflictCheck.conflictDetails
+      });
     }
-
     // Set originalTeacher if not already set (i.e. first transfer)
     if (!lecture.isTransferred) {
       lecture.originalTeacher = currentTeacherId;
@@ -1429,3 +1501,216 @@ export const transferLecture = async (req, res) => {
   }
 };
 
+export const checkVenueAvailability = async (req, res) => {
+  try {
+    const { date, time_slot, currentLectureId } = req.body;
+
+    if (!date || !time_slot) {
+      return res.status(400).json({ message: "Date and time_slot are required." });
+    }
+
+    const parseTimeSlot = (slot) => {
+      if (!slot || typeof slot !== "string") return null;
+      const parts = slot.split("-");
+      if (parts.length !== 2) return null;
+      const toMinutes = (t) => {
+        const [h, m] = t.trim().split(":").map(Number);
+        if (isNaN(h) || isNaN(m)) return null;
+        return h * 60 + m;
+      };
+      const start = toMinutes(parts[0]);
+      const end = toMinutes(parts[1]);
+      if (start === null || end === null || end <= start) return null;
+      return { start, end };
+    };
+
+    const overlaps = (a, b) => a.start < b.end && b.start < a.end;
+
+    const proposedTime = parseTimeSlot(time_slot);
+    if (!proposedTime) {
+      return res.status(400).json({ message: "Invalid time_slot format." });
+    }
+
+    const proposedDate = new Date(date).toISOString().split("T")[0];
+
+    const existingSchedules = await Schedule.find({
+      "lectures.date": {
+        $gte: new Date(proposedDate),
+        $lte: new Date(new Date(proposedDate).getTime() + 24 * 60 * 60 * 1000)
+      }
+    }).populate("teacher", "name").lean();
+
+    const occupiedVenues = [];
+
+    for (const existing of existingSchedules) {
+      for (const exLec of existing.lectures || []) {
+        if (currentLectureId && String(exLec._id) === currentLectureId) continue;
+        if (!exLec.date || !exLec.time_slot || !exLec.venue) continue;
+
+        const exTime = parseTimeSlot(exLec.time_slot);
+        if (!exTime) continue;
+
+        const exDate = new Date(exLec.date).toISOString().split("T")[0];
+        if (exDate !== proposedDate) continue;
+
+        if (overlaps(proposedTime, exTime)) {
+          occupiedVenues.push({
+            venue: exLec.venue,
+            subject: existing.subject,
+            teacherName: exLec.teacher?.name || existing.teacher?.name || "Unknown",
+            time_slot: exLec.time_slot
+          });
+        }
+      }
+    }
+
+    return res.status(200).json({ occupiedVenues });
+  } catch (err) {
+    return res.status(500).json({ message: err.message });
+  }
+};
+
+export const updateLectureVenue = async (req, res) => {
+  try {
+    const { scheduleId, lectureId } = req.params;
+    const { newVenue, reason } = req.body;
+    const { id: userId, role } = req.user;
+
+    if (!newVenue) {
+      return res.status(400).json({ message: "newVenue is required." });
+    }
+
+    const schedule = await Schedule.findById(scheduleId).populate("teacher", "name");
+    if (!schedule) {
+      return res.status(404).json({ message: "Schedule not found." });
+    }
+
+    const lecture = schedule.lectures.id(lectureId);
+    if (!lecture) {
+      return res.status(404).json({ message: "Lecture not found." });
+    }
+
+    const currentTeacherId = String(lecture.teacher || schedule.teacher._id);
+    if (role === "teacher" && currentTeacherId !== String(userId)) {
+      return res.status(403).json({ message: "Access denied. You can only change venue for your own lectures." });
+    }
+
+    if (lecture.venue === newVenue) {
+      return res.status(400).json({ message: "Lecture is already assigned to this venue." });
+    }
+
+    const parseTimeSlot = (slot) => {
+      if (!slot || typeof slot !== "string") return null;
+      const parts = slot.split("-");
+      if (parts.length !== 2) return null;
+      const toMinutes = (t) => {
+        const [h, m] = t.trim().split(":").map(Number);
+        if (isNaN(h) || isNaN(m)) return null;
+        return h * 60 + m;
+      };
+      const start = toMinutes(parts[0]);
+      const end = toMinutes(parts[1]);
+      if (start === null || end === null || end <= start) return null;
+      return { start, end };
+    };
+
+    const overlaps = (a, b) => a.start < b.end && b.start < a.end;
+
+    const proposedTime = parseTimeSlot(lecture.time_slot);
+    if (proposedTime && lecture.date) {
+      const proposedDate = new Date(lecture.date).toISOString().split("T")[0];
+
+      const existingSchedules = await Schedule.find({
+        "lectures.date": {
+          $gte: new Date(proposedDate),
+          $lte: new Date(new Date(proposedDate).getTime() + 24 * 60 * 60 * 1000)
+        }
+      }).lean();
+
+      for (const existing of existingSchedules) {
+        for (const exLec of existing.lectures || []) {
+          if (String(existing._id) === scheduleId && String(exLec._id) === lectureId) continue;
+          if (!exLec.date || !exLec.time_slot || exLec.venue !== newVenue) continue;
+
+          const exTime = parseTimeSlot(exLec.time_slot);
+          if (!exTime) continue;
+
+          const exDate = new Date(exLec.date).toISOString().split("T")[0];
+          if (exDate !== proposedDate) continue;
+
+          if (overlaps(proposedTime, exTime)) {
+            return res.status(409).json({
+              message: "This venue is already booked for another lecture during the selected date and time. Please select another available venue."
+            });
+          }
+        }
+      }
+    }
+
+    if (!lecture.venueHistory) {
+      lecture.venueHistory = [];
+    }
+    
+    lecture.venueHistory.push({
+      oldVenue: lecture.venue || "",
+      newVenue: newVenue,
+      changedBy: userId,
+      changedByRole: role,
+      changedAt: new Date(),
+      reason: reason || ""
+    });
+
+    lecture.venue = newVenue;
+    await schedule.save();
+
+    return res.status(200).json({ message: "Lecture venue updated successfully.", lecture });
+  } catch (err) {
+    return res.status(500).json({ message: err.message });
+  }
+};
+
+
+
+
+
+
+
+export const deleteLecture = async (req, res) => {
+  try {
+    const { scheduleId, lectureId } = req.params;
+    const { id: userId, role } = req.user;
+
+    const schedule = await Schedule.findById(scheduleId);
+    if (!schedule) {
+      return res.status(404).json({ message: "This lecture has already been deleted. Please refresh the page." });
+    }
+
+    const lecture = schedule.lectures.id(lectureId);
+    if (!lecture) {
+      return res.status(404).json({ message: "This lecture has already been deleted. Please refresh the page." });
+    }
+
+    // Role check: Only admin or the assigned teacher
+    if (role === "teacher") {
+      const isLectureTeacher = String(lecture.teacher) === String(userId);
+      const isScheduleTeacher = String(schedule.teacher) === String(userId);
+      if (!isLectureTeacher && !isScheduleTeacher) {
+        return res.status(403).json({ message: "Access denied. You can only delete your own assigned lectures." });
+      }
+    }
+
+    // Remove lecture
+    schedule.lectures.pull(lectureId);
+
+    // If no lectures remain, delete the entire schedule document to avoid orphans
+    if (schedule.lectures.length === 0) {
+      await Schedule.findByIdAndDelete(scheduleId);
+    } else {
+      await schedule.save();
+    }
+
+    return res.status(200).json({ message: "Lecture deleted successfully." });
+  } catch (err) {
+    return res.status(500).json({ message: err.message });
+  }
+};

@@ -33,6 +33,14 @@ const lectureSchema = new mongoose.Schema({
     transferredAt: { type: Date, default: Date.now },
     reason: { type: String, default: "" }
   }],
+  venueHistory: [{
+    oldVenue: { type: String, default: "" },
+    newVenue: { type: String, default: "" },
+    changedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
+    changedByRole: { type: String },
+    changedAt: { type: Date, default: Date.now },
+    reason: { type: String, default: "" }
+  }],
   punchInTime: { type: Date, default: null },
   punchOutTime: { type: Date, default: null },
   punchInNotes: { type: String, default: "" },

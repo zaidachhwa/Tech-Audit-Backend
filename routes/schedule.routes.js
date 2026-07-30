@@ -5,6 +5,7 @@ import {
   getScheduleById,
   updateSchedule,
   deleteSchedule,
+  deleteLecture,
   saveHomework,
   getLectureSubmissions,
   submitHomework,
@@ -17,7 +18,9 @@ import {
   verifySchedule,
   updateBatchLectureFromScheduler,
   checkConflicts,
-  transferLecture
+  transferLecture,
+  checkVenueAvailability,
+  updateLectureVenue
 } from "../controllers/schedule.controller.js";
 import { verifyToken, isAdmin, isAdminOrTeacher, isTeacher } from "../middleware/auth.middleware.js";
 import { uploadNotes } from "../middleware/upload.js";
@@ -29,6 +32,8 @@ router.get("/list", verifyToken, listSchedules);
 router.put("/batch-lecture/:id", verifyToken, updateBatchLectureFromScheduler);
 router.post("/check-conflicts", verifyToken, isAdminOrTeacher, checkConflicts);
 router.post("/:scheduleId/lectures/:lectureId/transfer", verifyToken, isAdminOrTeacher, transferLecture);
+router.post("/venues/availability", verifyToken, checkVenueAvailability);
+router.post("/:scheduleId/lectures/:lectureId/venue", verifyToken, isAdminOrTeacher, updateLectureVenue);
 
 // Homework and Submissions API
 router.post("/:scheduleId/lectures/:lectureId/homework", verifyToken, saveHomework);
@@ -65,6 +70,7 @@ router.get("/:id/submissions", verifyToken, isAdminOrTeacher, getScheduleSubmiss
 router.get("/:id", verifyToken, getScheduleById);
 router.put("/update/:id", verifyToken, updateSchedule);
 router.delete("/delete/:id", verifyToken, isAdminOrTeacher, deleteSchedule);
+router.delete("/:scheduleId/lectures/:lectureId", verifyToken, isAdminOrTeacher, deleteLecture);
 router.patch("/:id/verify", verifyToken, isAdminOrTeacher, verifySchedule);
 
 export default router;
