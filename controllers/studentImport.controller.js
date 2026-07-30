@@ -2,7 +2,7 @@ import bcrypt from "bcryptjs";
 import { Student } from "../models/student.model.js";
 import Batch from "../models/batch.model.js";
 import Settings from "../models/settings.model.js";
-import { sendStudentCredentials, generateRandomPassword } from "../utils/email.js";
+import { sendStudentCredentials, generateRandomPassword, sendParentWelcomeEmail } from "../utils/email.js";
 
 /**
  * Robust CSV parser that handles double quotes, carriage returns, commas,
@@ -77,13 +77,36 @@ export const bulkImportStudents = async (req, res) => {
     const rawHeaders = parsedLines[0];
     const headers = rawHeaders.map(h => h.trim().toLowerCase());
 
-    const nameIndex = headers.indexOf("name");
-    const emailIndex = headers.indexOf("email");
-    const phoneIndex = headers.indexOf("phone");
-    let parentEmailIndex = headers.indexOf("parent email");
-    if (parentEmailIndex === -1) parentEmailIndex = headers.indexOf("parentemail");
-    let parentPhoneIndex = headers.indexOf("parent phone");
-    if (parentPhoneIndex === -1) parentPhoneIndex = headers.indexOf("parentphone");
+    let nameIndex = headers.indexOf("student name");
+    if (nameIndex === -1) nameIndex = headers.indexOf("name");
+    
+    let emailIndex = headers.indexOf("student email");
+    if (emailIndex === -1) emailIndex = headers.indexOf("email");
+    
+    let phoneIndex = headers.indexOf("contact no");
+    if (phoneIndex === -1) phoneIndex = headers.indexOf("phone");
+    
+    let fatherNameIndex = headers.indexOf("father name");
+    if (fatherNameIndex === -1) fatherNameIndex = headers.indexOf("fathername");
+    
+    let fatherPhoneIndex = headers.indexOf("father contact no");
+    if (fatherPhoneIndex === -1) fatherPhoneIndex = headers.indexOf("father phone");
+    if (fatherPhoneIndex === -1) fatherPhoneIndex = headers.indexOf("fatherphone");
+    
+    let fatherEmailIndex = headers.indexOf("father email id");
+    if (fatherEmailIndex === -1) fatherEmailIndex = headers.indexOf("father email");
+    if (fatherEmailIndex === -1) fatherEmailIndex = headers.indexOf("fatheremail");
+
+    let motherNameIndex = headers.indexOf("mother name");
+    if (motherNameIndex === -1) motherNameIndex = headers.indexOf("mothername");
+    
+    let motherPhoneIndex = headers.indexOf("mother contact no");
+    if (motherPhoneIndex === -1) motherPhoneIndex = headers.indexOf("mother phone");
+    if (motherPhoneIndex === -1) motherPhoneIndex = headers.indexOf("motherphone");
+    
+    let motherEmailIndex = headers.indexOf("mother email id");
+    if (motherEmailIndex === -1) motherEmailIndex = headers.indexOf("mother email");
+    if (motherEmailIndex === -1) motherEmailIndex = headers.indexOf("motheremail");
 
     if (nameIndex === -1 || emailIndex === -1) {
       return res.status(400).json({
@@ -133,8 +156,13 @@ export const bulkImportStudents = async (req, res) => {
       const name = row[nameIndex]?.trim() || "";
       const email = row[emailIndex]?.trim() || "";
       const phone = phoneIndex !== -1 ? (row[phoneIndex]?.trim() || "") : "";
-      const parentEmail = parentEmailIndex !== -1 ? (row[parentEmailIndex] || "").trim().toLowerCase() : "";
-      const parentPhoneNo = parentPhoneIndex !== -1 ? (row[parentPhoneIndex] || "").trim() : "";
+      
+      const fatherName = fatherNameIndex !== -1 ? (row[fatherNameIndex] || "").trim() : "";
+      const fatherPhone = fatherPhoneIndex !== -1 ? (row[fatherPhoneIndex] || "").trim() : "";
+      const fatherEmail = fatherEmailIndex !== -1 ? (row[fatherEmailIndex] || "").trim().toLowerCase() : "";
+      const motherName = motherNameIndex !== -1 ? (row[motherNameIndex] || "").trim() : "";
+      const motherPhone = motherPhoneIndex !== -1 ? (row[motherPhoneIndex] || "").trim() : "";
+      const motherEmail = motherEmailIndex !== -1 ? (row[motherEmailIndex] || "").trim().toLowerCase() : "";
 
       // Name and Email are mandatory
       if (!name || !email) {
@@ -229,16 +257,24 @@ export const bulkImportStudents = async (req, res) => {
       const rawPassword = generateRandomPassword();
       const hashedPassword = await bcrypt.hash(rawPassword, 10);
 
+      if (errors.length > 0) {
+        console.log("Errors so far:", errors);
+      }
+
       // Store in valid students list
       validStudents.push({
         name,
-        email,
+        email: emailLower,
         phoneNo: phone,
         password: hashedPassword,
         batch_name,
         batch_no,
-        parentEmail,
-        parentPhoneNo,
+        fatherName,
+        fatherPhone,
+        fatherEmail,
+        motherName,
+        motherPhone,
+        motherEmail,
         customFields: studentCustomFields,
         isActive: true // Automatically approved when added by admin
       });
@@ -247,7 +283,9 @@ export const bulkImportStudents = async (req, res) => {
       passwordsToEmail.push({
         email,
         name,
-        password: rawPassword
+        password: rawPassword,
+        fatherEmail,
+        motherEmail
       });
     }
 
@@ -263,9 +301,23 @@ export const bulkImportStudents = async (req, res) => {
         { $addToSet: { students: { $each: insertedIds } } }
       );
 
-      // 9. Send email notifications to students
+      // 9. Send email notifications to students and parents
       for (const item of passwordsToEmail) {
         await sendStudentCredentials(item.email, item.name, item.password);
+        
+        if (item.fatherEmail || item.motherEmail) {
+          const parentEmails = [];
+          if (item.fatherEmail) parentEmails.push(item.fatherEmail);
+          if (item.motherEmail) parentEmails.push(item.motherEmail);
+          
+          if (parentEmails.length > 0) {
+            await sendParentWelcomeEmail({
+              parentEmail: parentEmails,
+              studentName: item.name,
+              courseName: batch.batch_name
+            });
+          }
+        }
       }
     }
 

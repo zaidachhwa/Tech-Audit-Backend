@@ -9,7 +9,7 @@ import Homework from "../models/homework.model.js";
 import { Attendance } from "../models/attendance.model.js";
 import { StudentAttendance } from "../models/studentAttendance.model.js";
 import { ActivityLog } from "../models/activityLog.model.js";
-import { sendStudentCredentials, generateRandomPassword } from "../utils/email.js";
+import { sendStudentCredentials, sendParentWelcomeEmail, generateRandomPassword } from "../utils/email.js";
 import { getTeacherBatchIds } from "../utils/teacherScope.js";
 
 const JWT_SECRET = process.env.JWT_SECRET;
@@ -33,6 +33,12 @@ export const registerStudent = async (req, res) => {
       gender,
       parentEmail,
       parentPhoneNo,
+      fatherName,
+      fatherPhone,
+      fatherEmail,
+      motherName,
+      motherPhone,
+      motherEmail,
       profilePhoto,
       idCardPhoto,
       aadhaarPhoto,
@@ -90,6 +96,12 @@ export const registerStudent = async (req, res) => {
       gender: gender || "",
       parentEmail: parentEmail || "",
       parentPhoneNo: parentPhoneNo || "",
+      fatherName: fatherName || "",
+      fatherPhone: fatherPhone || "",
+      fatherEmail: fatherEmail || "",
+      motherName: motherName || "",
+      motherPhone: motherPhone || "",
+      motherEmail: motherEmail || "",
       profilePhoto: profilePhoto || "",
       idCardPhoto: idCardPhoto || "",
       aadhaarPhoto: aadhaarPhoto || "",
@@ -109,6 +121,12 @@ export const registerStudent = async (req, res) => {
     // Send credentials via email if applicable
     if (shouldSendEmail) {
       await sendStudentCredentials(email, name, finalPassword);
+      if (fatherEmail) {
+        await sendParentWelcomeEmail(name, `${batch_name} ${batch_no}`, email, fatherEmail);
+      }
+      if (motherEmail) {
+        await sendParentWelcomeEmail(name, `${batch_name} ${batch_no}`, email, motherEmail);
+      }
     }
 
     const token = jwt.sign({ id: student._id, role: "student" }, JWT_SECRET, {
@@ -143,8 +161,8 @@ export const loginStudent = async (req, res) => {
         .json({ message: "Your account is pending approval from the admin" });
     }
 
-    const ok = await bcrypt.compare(password, student.password);
-    if (!ok) return res.status(400).json({ message: "Invalid credentials" });
+    const isMatch = await bcrypt.compare(password, student.password);
+    if (!isMatch) return res.status(400).json({ message: "Invalid credentials" });
 
     // Update last login timestamp
     student.lastLogin = new Date();
@@ -154,18 +172,12 @@ export const loginStudent = async (req, res) => {
       expiresIn: "7d",
     });
 
-    return res.status(200).json({
-      message: "Logged in",
-      token,
-      student: {
-        id: student._id,
-        name: student.name,
-        email: student.email,
-        batch_name: student.batch_name,
-        batch_no: student.batch_no,
-        role: student.role,
-      },
-    });
+    // Generate response object with role explicitly included
+    const studentData = student.toObject();
+    delete studentData.password;
+    studentData.role = "student";
+
+    return res.status(200).json({ message: "Login successful", token, student: studentData });
   } catch (err) {
     return res.status(500).json({ message: err.message });
   }
@@ -458,7 +470,11 @@ export const deleteStudent = async (req, res) => {
 export const updateStudent = async (req, res) => {
   try {
     const { id } = req.params;
-    const { name, email, password, batch_name, batch_no, phoneNo, parentEmail, parentPhoneNo, isActive, customFields } = req.body;
+    const { 
+      name, email, password, batch_name, batch_no, phoneNo, parentEmail, parentPhoneNo, 
+      fatherName, fatherPhone, fatherEmail, motherName, motherPhone, motherEmail,
+      isActive, customFields 
+    } = req.body;
 
     const student = await Student.findById(id);
     if (!student)
@@ -483,6 +499,12 @@ export const updateStudent = async (req, res) => {
     if (phoneNo !== undefined) student.phoneNo = phoneNo;
     if (parentEmail !== undefined) student.parentEmail = parentEmail;
     if (parentPhoneNo !== undefined) student.parentPhoneNo = parentPhoneNo;
+    if (fatherName !== undefined) student.fatherName = fatherName;
+    if (fatherPhone !== undefined) student.fatherPhone = fatherPhone;
+    if (fatherEmail !== undefined) student.fatherEmail = fatherEmail;
+    if (motherName !== undefined) student.motherName = motherName;
+    if (motherPhone !== undefined) student.motherPhone = motherPhone;
+    if (motherEmail !== undefined) student.motherEmail = motherEmail;
     if (isActive !== undefined) student.isActive = isActive;
     if (customFields) {
       student.customFields = { ...student.customFields, ...customFields };
