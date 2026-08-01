@@ -1115,6 +1115,11 @@ export const deleteNotes = async (req, res) => {
   try {
     const { scheduleId, lectureId, type } = req.params;
     const { id: userId, role } = req.user;
+    console.log("scheduleId", scheduleId);
+    console.log("lectureId", lectureId);
+    console.log("type", type);
+    console.log("userId", userId);
+    console.log("role", role);
 
     const schedule = await Schedule.findById(scheduleId);
     if (!schedule) {
@@ -1679,6 +1684,10 @@ export const deleteLecture = async (req, res) => {
   try {
     const { scheduleId, lectureId } = req.params;
     const { id: userId, role } = req.user;
+    console.log("scheduleId", scheduleId);
+    console.log("lectureId", lectureId);
+    console.log("userId", userId);
+    console.log("role", role);
 
     const schedule = await Schedule.findById(scheduleId);
     if (!schedule) {
