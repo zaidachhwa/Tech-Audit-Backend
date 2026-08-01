@@ -753,7 +753,11 @@ export const updateSchedule = async (req, res) => {
  */
 export const deleteSchedule = async (req, res) => {
   try {
+    console.log("========== [DELETE SCHEDULE ENDPOINT HIT] ==========");
+    console.log("Req params:", req.params);
+    
     const { id: userId, role } = req.user;
+    console.log("User:", { userId, role });
     const schedule = await Schedule.findById(req.params.id);
     if (!schedule) {
       return res.status(404).json({ message: "Schedule not found" });
@@ -1081,8 +1085,12 @@ export const getScheduleSubmissions = async (req, res) => {
  */
 export const deleteSubmission = async (req, res) => {
   try {
+    console.log("========== [DELETE SUBMISSION ENDPOINT HIT] ==========");
+    console.log("Req params:", req.params);
+
     const { submissionId } = req.params;
     const { id: userId, role } = req.user;
+    console.log("User:", { userId, role });
 
     const submission = await Submission.findById(submissionId);
     if (!submission) {
@@ -1113,13 +1121,12 @@ export const deleteSubmission = async (req, res) => {
  */
 export const deleteNotes = async (req, res) => {
   try {
+    console.log("========== [DELETE NOTES ENDPOINT HIT] ==========");
     const { scheduleId, lectureId, type } = req.params;
     const { id: userId, role } = req.user;
-    console.log("scheduleId", scheduleId);
-    console.log("lectureId", lectureId);
-    console.log("type", type);
-    console.log("userId", userId);
-    console.log("role", role);
+    
+    console.log("Req params:", { scheduleId, lectureId, type });
+    console.log("User:", { userId, role });
 
     const schedule = await Schedule.findById(scheduleId);
     if (!schedule) {
@@ -1682,12 +1689,12 @@ export const updateLectureVenue = async (req, res) => {
 
 export const deleteLecture = async (req, res) => {
   try {
+    console.log("========== [DELETE LECTURE ENDPOINT HIT] ==========");
     const { scheduleId, lectureId } = req.params;
     const { id: userId, role } = req.user;
-    console.log("scheduleId", scheduleId);
-    console.log("lectureId", lectureId);
-    console.log("userId", userId);
-    console.log("role", role);
+    
+    console.log("Req params:", { scheduleId, lectureId });
+    console.log("User:", { userId, role });
 
     const schedule = await Schedule.findById(scheduleId);
     if (!schedule) {
