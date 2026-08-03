@@ -134,8 +134,7 @@ export const createSchedule = async (req, res) => {
       batch,
       teacher,
       lectures: lectures || [],
-      // Admin-created schedules require teacher verification before going live
-      verificationStatus: req.user.role === "admin" ? "pending_teacher" : "approved",
+      verificationStatus: "approved",
       createdByRole: req.user.role === "admin" ? "admin" : "teacher"
     });
 
@@ -212,11 +211,6 @@ export const listSchedules = async (req, res) => {
       }
 
       query.batch = studentBatch._id;
-      // Students see schedules that are approved OR legacy ones without the field
-      query.$or = [
-        { verificationStatus: "approved" },
-        { verificationStatus: { $exists: false } }
-      ];
     }
 
     const schedules = await Schedule.find(query)
