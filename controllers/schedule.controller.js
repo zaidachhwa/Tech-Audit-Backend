@@ -1511,6 +1511,39 @@ export const updateLectureVenue = async (req, res) => {
       return res.status(400).json({ message: "newVenue is required." });
     }
 
+    if (scheduleId.startsWith("batch_syllabus_") || scheduleId.startsWith("syllabus_")) {
+      const bl = await BatchLecture.findById(lectureId);
+      if (!bl) {
+        return res.status(404).json({ message: "Lecture not found." });
+      }
+
+      const currentTeacherId = String(bl.assignedTo);
+      if (role === "teacher" && currentTeacherId !== String(userId)) {
+        return res.status(403).json({ message: "Access denied. You can only change venue for your own lectures." });
+      }
+
+      if (bl.venue === newVenue) {
+        return res.status(400).json({ message: "Lecture is already assigned to this venue." });
+      }
+      
+      if (!bl.venueHistory) {
+        bl.venueHistory = [];
+      }
+      bl.venueHistory.push({
+        oldVenue: bl.venue || "",
+        newVenue: newVenue,
+        changedBy: userId,
+        changedByRole: role,
+        changedAt: new Date(),
+        reason: reason || ""
+      });
+
+      bl.venue = newVenue;
+      await bl.save();
+
+      return res.status(200).json({ message: "Lecture venue updated successfully.", lecture: bl });
+    }
+
     const schedule = await Schedule.findById(scheduleId).populate("teacher", "name");
     if (!schedule) {
       return res.status(404).json({ message: "Schedule not found." });
