@@ -258,8 +258,8 @@ export const studentPunchIn = async (req, res) => {
     const today = new Date();
     const dateKey = new Date(today.getFullYear(), today.getMonth(), today.getDate());
 
-    // Check if already punched in today
     const existing = await StudentAttendance.findOne({ student: studentId, date: dateKey });
+    
     if (existing && existing.status !== "NOT_PUNCHED") {
       console.error(`Punch In Error: Student ${studentId} has already punched in today.`);
       return res.status(400).json({
