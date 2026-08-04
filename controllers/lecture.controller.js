@@ -634,6 +634,16 @@ export const updateLectureStatus = async (req, res) => {
     }
 
     await batchLecture.save();
+    
+    // Also update the base template so admin panel sees it
+    if (batchLecture.templateLecture) {
+      const Lecture = (await import("../models/lecture.model.js")).Lecture;
+      await Lecture.findByIdAndUpdate(batchLecture.templateLecture, {
+        completionStatus: status === "Yet to be scheduled" ? "Pending" : status,
+        completedAt: status === "Completed" ? new Date() : undefined
+      });
+    }
+
     res.json({ message: "Lecture status updated", lecture: batchLecture, topic: batchLecture });
   } catch (err) {
     res.status(500).json({ message: err.message });

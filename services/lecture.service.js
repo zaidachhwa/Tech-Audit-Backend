@@ -45,6 +45,10 @@ export const updateLectureService = async (id, data) => {
         lectureType: updatedLecture.lectureType,
         order: updatedLecture.order,
         referenceTo: updatedLecture.referenceTo || null,
+        status: updatedLecture.status,
+        completionStatus: updatedLecture.completionStatus,
+        completedAt: updatedLecture.completedAt,
+        subLectures: updatedLecture.subLectures,
       }
     );
   }
