@@ -5,6 +5,7 @@ import { Schedule } from "../models/schedule.model.js";
 import { BatchLecture } from "../models/batchLecture.model.js";
 import { sendPushToUser } from "../services/pushNotification.service.js";
 import { notifyParents } from "../services/parentNotification.service.js";
+import { getTeacherBatchIds } from "../utils/teacherScope.js";
 
 /* ─── HELPERS ────────────────────────────────────────────────────────────── */
 
@@ -270,12 +271,23 @@ export const studentPunchIn = async (req, res) => {
     }
 
     const now = new Date();
+    
+    // Check if late (after 09:10 AM IST)
+    const istTimeStr = now.toLocaleTimeString('en-GB', { timeZone: 'Asia/Kolkata', hour12: false, hour: '2-digit', minute: '2-digit' });
+    let attStatus = "Present";
+    let lateAppStatus = "None";
+    if (istTimeStr > "09:10") {
+      attStatus = "Late";
+      lateAppStatus = "Pending";
+    }
 
     if (existing) {
       existing.punchInTime = now;
       existing.status = "PUNCHED_IN";
       existing.punchInPhoto = photoUrl;
       existing.punchInLocation = { lat, lng };
+      existing.attendanceStatus = attStatus;
+      existing.lateApprovalStatus = lateAppStatus;
       await existing.save();
       return res.json({ message: "Punched In successfully!", record: existing });
     }
@@ -288,6 +300,8 @@ export const studentPunchIn = async (req, res) => {
       status: "PUNCHED_IN",
       punchInPhoto: photoUrl,
       punchInLocation: { lat, lng },
+      attendanceStatus: attStatus,
+      lateApprovalStatus: lateAppStatus,
     });
 
     return res.json({ message: "Punched In successfully!", record });
@@ -414,15 +428,32 @@ export const getMyAttendance = async (req, res) => {
 export const getStudentAttendanceLogs = async (req, res) => {
   try {
     const { studentId, batchId, startDate, endDate, month, year } = req.query;
+    const userRole = req.user?.role;
+    const userId = req.user?.id;
 
     let query = {};
+
+    if (userRole === "teacher") {
+      const allocatedBatchIds = await getTeacherBatchIds(userId);
+      query.batch = { $in: allocatedBatchIds };
+    }
 
     if (studentId && studentId !== "all") {
       query.student = studentId;
     }
 
     if (batchId && batchId !== "all") {
-      query.batch = batchId;
+      if (userRole === "teacher") {
+        // Ensure requested batch is within allocated batches
+        const allocatedBatchIds = await getTeacherBatchIds(userId);
+        if (allocatedBatchIds.some(id => id.toString() === batchId.toString())) {
+          query.batch = batchId;
+        } else {
+          query.batch = null; // No match
+        }
+      } else {
+        query.batch = batchId;
+      }
     }
 
     // Date filtering
@@ -452,7 +483,80 @@ export const getStudentAttendanceLogs = async (req, res) => {
 
     const validRecords = records.filter(record => record.student != null);
 
-    return res.json({ records: validRecords });
+    let finalRecords = [...validRecords];
+
+    const isSingleDay = startDate && endDate && startDate === endDate;
+    const isNoDate = !startDate && !endDate && month === undefined;
+
+    // Inject absent records for un-punched students for single day or today
+    if (isSingleDay || isNoDate) {
+      const targetDate = isSingleDay ? new Date(startDate) : new Date();
+      targetDate.setHours(0, 0, 0, 0);
+
+      let studentQuery = {};
+      let targetBatches = [];
+      
+      if (batchId && batchId !== "all") {
+        const b = await Batch.findById(batchId).lean();
+        if (b) {
+          studentQuery.batch_name = b.batch_name;
+          if (b.batch_no) studentQuery.batch_no = b.batch_no;
+          targetBatches.push(b);
+        }
+      } else {
+        if (userRole === "teacher") {
+          const allocatedBatchIds = await getTeacherBatchIds(userId);
+          targetBatches = await Batch.find({ _id: { $in: allocatedBatchIds } }).lean();
+        } else {
+          targetBatches = await Batch.find().lean();
+        }
+      }
+
+      if (userRole === "teacher" && (!batchId || batchId === "all")) {
+        const allocatedBatchIds = await getTeacherBatchIds(userId);
+        const allowedBatches = await Batch.find({ _id: { $in: allocatedBatchIds } }).lean();
+        if (allowedBatches.length > 0) {
+          const names = allowedBatches.map(b => b.batch_name);
+          studentQuery.batch_name = { $in: names };
+        } else {
+          studentQuery.batch_name = null; // force empty
+        }
+      }
+
+      if (studentId && studentId !== "all") {
+        studentQuery._id = studentId;
+      }
+
+      const allStudents = await Student.find(studentQuery).lean();
+      const punchedInStudentIds = new Set(validRecords.map(r => r.student._id.toString()));
+      const missingStudents = allStudents.filter(s => !punchedInStudentIds.has(s._id.toString()));
+
+      for (const st of missingStudents) {
+        const sBatch = targetBatches.find(b => b.batch_name === st.batch_name && b.batch_no === st.batch_no);
+        finalRecords.push({
+          _id: "missing_" + st._id.toString(),
+          student: {
+            _id: st._id,
+            name: st.name,
+            email: st.email,
+            rollNo: st.rollNo,
+            batch_name: st.batch_name,
+            batch_no: st.batch_no,
+          },
+          batch: sBatch || { batch_name: st.batch_name, batch_no: st.batch_no },
+          date: targetDate,
+          status: "NOT_PUNCHED",
+          attendanceStatus: "Absent",
+          lateApprovalStatus: "None",
+          punchInTime: null,
+          punchOutTime: null,
+          lectureAttendance: [],
+          editHistory: []
+        });
+      }
+    }
+
+    return res.json({ records: finalRecords });
   } catch (err) {
     return res.status(500).json({ message: err.message });
   }
@@ -497,6 +601,21 @@ export const adminEditPunchTime = async (req, res) => {
       record.status = "PUNCHED_IN";
     }
 
+    // Recalculate Late Status
+    if (record.punchInTime) {
+      const pinDate = new Date(record.punchInTime);
+      const istTimeStr = pinDate.toLocaleTimeString('en-GB', { timeZone: 'Asia/Kolkata', hour12: false, hour: '2-digit', minute: '2-digit' });
+      if (istTimeStr > "09:10") {
+        if (record.lateApprovalStatus !== "Approved") {
+          record.attendanceStatus = "Late";
+          record.lateApprovalStatus = "Pending";
+        }
+      } else {
+        record.attendanceStatus = "Present";
+        record.lateApprovalStatus = "None";
+      }
+    }
+
     // Recalculate lecture attendance
     await recalcLectureAttendance(record);
     await record.save();
@@ -525,6 +644,101 @@ export const adminEditPunchTime = async (req, res) => {
 
     return res.json({ message: "Attendance record updated successfully.", record: updated });
   } catch (err) {
+    return res.status(500).json({ message: err.message });
+  }
+};
+
+/* ─── ADMIN: APPROVE LATE ATTENDANCE ─────────────────────────────────────── */
+
+export const adminApproveLateAttendance = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const adminId = req.user.id;
+
+    const record = await StudentAttendance.findById(id);
+    if (!record) {
+      return res.status(404).json({ message: "Attendance record not found." });
+    }
+
+    let isLate = record.attendanceStatus === "Late" && record.lateApprovalStatus === "Pending";
+    
+    // Retroactive check for older records
+    if (!isLate && record.status !== "NOT_PUNCHED" && record.punchInTime && record.lateApprovalStatus !== "Approved" && record.lateApprovalStatus !== "Rejected") {
+      const pinDate = new Date(record.punchInTime);
+      const istTimeStr = pinDate.toLocaleTimeString('en-GB', { timeZone: 'Asia/Kolkata', hour12: false, hour: '2-digit', minute: '2-digit' });
+      if (istTimeStr > "09:10") {
+        isLate = true;
+      }
+    }
+
+    if (!isLate) {
+      return res.status(400).json({ message: "Record is not pending late approval." });
+    }
+
+    record.attendanceStatus = "Present";
+    record.lateApprovalStatus = "Approved";
+    record.lateApprovedBy = adminId;
+    record.lateApprovedAt = new Date();
+
+    await record.save();
+
+    const updated = await StudentAttendance.findById(id)
+      .populate("student", "name email batch_name batch_no rollNo")
+      .populate("batch", "batch_name batch_no")
+      .lean();
+
+    return res.json({ message: "Late attendance approved successfully.", record: updated });
+  } catch (err) {
+    console.error("Approve Late Attendance Error:", err);
+    return res.status(500).json({ message: err.message });
+  }
+};
+
+/* ─── ADMIN: REJECT LATE ATTENDANCE ─────────────────────────────────────── */
+
+export const adminRejectLateAttendance = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const adminId = req.user.id;
+
+    const record = await StudentAttendance.findById(id);
+    if (!record) {
+      return res.status(404).json({ message: "Attendance record not found." });
+    }
+
+    let isLate = record.attendanceStatus === "Late" && record.lateApprovalStatus === "Pending";
+    
+    // Retroactive check for older records
+    if (!isLate && record.status !== "NOT_PUNCHED" && record.punchInTime && record.lateApprovalStatus !== "Approved" && record.lateApprovalStatus !== "Rejected") {
+      const pinDate = new Date(record.punchInTime);
+      const istTimeStr = pinDate.toLocaleTimeString('en-GB', { timeZone: 'Asia/Kolkata', hour12: false, hour: '2-digit', minute: '2-digit' });
+      if (istTimeStr > "09:10") {
+        isLate = true;
+      }
+    }
+
+    if (!isLate) {
+      return res.status(400).json({ message: "Record is not pending late approval." });
+    }
+
+    record.attendanceStatus = "Late";
+    // Using "Rejected" might need schema update if not in Enum. Wait, enum for lateApprovalStatus: ["Pending", "Approved", "None"]
+    // I should update the enum to include "Rejected". Or wait, I can just leave it as "Pending"? No, the user said "Late Rejected (if applicable)"
+    // Let me check if I should update the schema. Yes, I'll update the schema in another tool call. For now, I'll set it to "Rejected".
+    record.lateApprovalStatus = "Rejected";
+    record.lateApprovedBy = adminId;
+    record.lateApprovedAt = new Date();
+
+    await record.save();
+
+    const updated = await StudentAttendance.findById(id)
+      .populate("student", "name email batch_name batch_no rollNo")
+      .populate("batch", "batch_name batch_no")
+      .lean();
+
+    return res.json({ message: "Late attendance rejected successfully.", record: updated });
+  } catch (err) {
+    console.error("Reject Late Attendance Error:", err);
     return res.status(500).json({ message: err.message });
   }
 };

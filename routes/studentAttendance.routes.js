@@ -6,6 +6,8 @@ import {
   getMyAttendance,
   getStudentAttendanceLogs,
   adminEditPunchTime,
+  adminApproveLateAttendance,
+  adminRejectLateAttendance,
 } from "../controllers/studentAttendance.controller.js";
 import { verifyToken, isStudent, isAdminOrTeacher, isAdmin } from "../middleware/auth.middleware.js";
 import { uploadNotes } from "../middleware/upload.js";
@@ -46,7 +48,9 @@ router.get("/my", verifyToken, isStudent, getMyAttendance);
 // Teacher/Admin routes
 router.get("/records", verifyToken, isAdminOrTeacher, getStudentAttendanceLogs);
 
-// Admin-only routes
-router.patch("/:id/edit", verifyToken, isAdmin, adminEditPunchTime);
+// Admin/Teacher routes
+router.patch("/:id/edit", verifyToken, isAdminOrTeacher, adminEditPunchTime);
+router.put("/approve-late/:id", verifyToken, isAdminOrTeacher, adminApproveLateAttendance);
+router.put("/reject-late/:id", verifyToken, isAdminOrTeacher, adminRejectLateAttendance);
 
 export default router;

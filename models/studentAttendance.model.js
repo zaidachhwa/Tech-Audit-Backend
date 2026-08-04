@@ -42,6 +42,18 @@ const studentAttendanceSchema = new mongoose.Schema(
       enum: ["NOT_PUNCHED", "PUNCHED_IN", "PUNCHED_OUT"],
       default: "NOT_PUNCHED",
     },
+    attendanceStatus: {
+      type: String,
+      enum: ["Present", "Late", "Absent"],
+      default: "Absent",
+    },
+    lateApprovalStatus: {
+      type: String,
+      enum: ["Pending", "Approved", "Rejected", "None"],
+      default: "None",
+    },
+    lateApprovedBy: { type: mongoose.Schema.Types.ObjectId, ref: "Admin", default: null },
+    lateApprovedAt: { type: Date, default: null },
     lectureAttendance: [lectureAttendanceSchema],
     editHistory: [editHistorySchema],
   },
