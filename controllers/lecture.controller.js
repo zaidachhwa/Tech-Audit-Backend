@@ -190,7 +190,7 @@ export const createLecture = async (req, res) => {
  */
 export const updateLecture = async (req, res) => {
   try {
-    const { id } = req.params;
+    const id = req.params.id || req.params.topicId || req.params.lectureId;
     const updated = await lectureService.updateLectureService(id, req.body);
     if (!updated) {
       return res.status(404).json({ message: "Lecture not found" });
@@ -206,7 +206,7 @@ export const updateLecture = async (req, res) => {
  */
 export const deleteLecture = async (req, res) => {
   try {
-    const { id } = req.params;
+    const id = req.params.id || req.params.topicId || req.params.lectureId;
     const deleted = await lectureService.deleteLectureService(id);
     if (!deleted) {
       return res.status(404).json({ message: "Lecture not found" });
