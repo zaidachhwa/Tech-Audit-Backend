@@ -1,0 +1,1 @@
+import mongoose from mongoose; import dotenv from dotenv; import { Student } from ./models/student.model.js; dotenv.config({ path: ./.env }); mongoose.connect(process.env.MONGO_URI).then(async () => { const students = await Student.find({}, name email fatherName motherName customFields).lean(); console.log(JSON.stringify(students, null, 2)); process.exit(0); });
