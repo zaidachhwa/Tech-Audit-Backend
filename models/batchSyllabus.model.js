@@ -27,10 +27,10 @@ const batchSyllabusSchema = new mongoose.Schema(
       default: "",
     },
 
-    // ✅ REQUIRED: syllabus-level due date
+    // optional syllabus-level due date
     dueDate: {
       type: Date,
-      required: true,
+      required: false,
     },
   },
   { timestamps: true }
