@@ -186,6 +186,4 @@ export const initCronJobs = () => {
       console.error("Error in project due cron:", error);
     }
   });
-
-  console.log("Cron jobs initialized.");
 };

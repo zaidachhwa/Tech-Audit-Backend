@@ -123,11 +123,20 @@ export const createHomework = async (req, res) => {
  */
 export const getHomework = async (req, res) => {
   try {
-    const homeworkList = await Homework.find()
+    const filter = {};
+    if (req.user && req.user.role === "teacher") {
+      filter.assignedBy = req.user.id;
+    }
+
+    const homeworkList = await Homework.find(filter)
       .sort({ createdAt: -1 })
       .populate("student", "name email")
       .populate("assignedBy", "name email")
-      .populate("lecture", "title")
+      .populate({
+        path: "lecture",
+        select: "title syllabus",
+        populate: { path: "syllabus", select: "subject" }
+      })
       .lean();
     res.json(homeworkList);
   } catch (err) {
@@ -150,6 +159,10 @@ export const getHomeworkById = async (req, res) => {
       return res.status(404).json({ message: "Homework not found" });
     }
 
+    if (req.user && req.user.role === "teacher" && homework.assignedBy?.toString() !== req.user.id) {
+      return res.status(403).json({ message: "Access denied. You can only view homework assigned by you." });
+    }
+
     res.json(homework);
   } catch (err) {
     res.status(500).json({ message: err.message });
@@ -162,10 +175,16 @@ export const getHomeworkById = async (req, res) => {
 export const updateHomework = async (req, res) => {
   try {
     const { id } = req.params;
-    const updated = await Homework.findByIdAndUpdate(id, req.body, { new: true });
-    if (!updated) {
+    const homework = await Homework.findById(id);
+    if (!homework) {
       return res.status(404).json({ message: "Homework not found" });
     }
+
+    if (req.user && req.user.role === "teacher" && homework.assignedBy?.toString() !== req.user.id) {
+      return res.status(403).json({ message: "Access denied. You can only update homework assigned by you." });
+    }
+
+    const updated = await Homework.findByIdAndUpdate(id, req.body, { new: true });
     res.json({ message: "Homework updated successfully", homework: updated });
   } catch (err) {
     res.status(500).json({ message: err.message });
@@ -178,10 +197,16 @@ export const updateHomework = async (req, res) => {
 export const deleteHomework = async (req, res) => {
   try {
     const { id } = req.params;
-    const deleted = await Homework.findByIdAndDelete(id);
-    if (!deleted) {
+    const homework = await Homework.findById(id);
+    if (!homework) {
       return res.status(404).json({ message: "Homework not found" });
     }
+
+    if (req.user && req.user.role === "teacher" && homework.assignedBy?.toString() !== req.user.id) {
+      return res.status(403).json({ message: "Access denied. You can only delete homework assigned by you." });
+    }
+
+    await Homework.findByIdAndDelete(id);
     res.json({ message: "Homework deleted successfully" });
   } catch (err) {
     res.status(500).json({ message: err.message });
@@ -321,10 +346,19 @@ export const getStudentHomeworkHistory = async (req, res) => {
  */
 export const getPendingHomework = async (req, res) => {
   try {
-    const pendingList = await Homework.find({ status: "pending_review" })
+    const filter = { status: "pending_review" };
+    if (req.user && req.user.role === "teacher") {
+      filter.assignedBy = req.user.id;
+    }
+
+    const pendingList = await Homework.find(filter)
       .populate("student", "name email")
       .populate("assignedBy", "name email")
-      .populate("lecture", "title")
+      .populate({
+        path: "lecture",
+        select: "title syllabus",
+        populate: { path: "syllabus", select: "subject" }
+      })
       .lean();
     res.json(pendingList);
   } catch (err) {
@@ -343,6 +377,10 @@ export const approveHomework = async (req, res) => {
     const homework = await Homework.findOne({ "submissions._id": submissionId });
     if (!homework) {
       return res.status(404).json({ message: "Homework submission not found" });
+    }
+
+    if (req.user && req.user.role === "teacher" && homework.assignedBy?.toString() !== req.user.id) {
+      return res.status(403).json({ message: "Access denied. You can only approve submissions for homework assigned by you." });
     }
 
     const sub = homework.submissions.id(submissionId);
@@ -375,6 +413,10 @@ export const rejectHomework = async (req, res) => {
     const homework = await Homework.findOne({ "submissions._id": submissionId });
     if (!homework) {
       return res.status(404).json({ message: "Homework submission not found" });
+    }
+
+    if (req.user && req.user.role === "teacher" && homework.assignedBy?.toString() !== req.user.id) {
+      return res.status(403).json({ message: "Access denied. You can only reject submissions for homework assigned by you." });
     }
 
     const sub = homework.submissions.id(submissionId);

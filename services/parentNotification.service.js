@@ -57,7 +57,6 @@ export const notifyParents = async (studentIds, subject, message) => {
     // Execute all notifications without blocking completely
     if (notifications.length > 0) {
       await Promise.allSettled(notifications);
-      console.log(`✅ Sent parent notifications to ${students.length} parents.`);
     }
 
   } catch (error) {

@@ -258,7 +258,7 @@ export const bulkImportStudents = async (req, res) => {
       const hashedPassword = await bcrypt.hash(rawPassword, 10);
 
       if (errors.length > 0) {
-        console.log("Errors so far:", errors);
+        console.error("Errors so far:", errors);
       }
 
       // Store in valid students list

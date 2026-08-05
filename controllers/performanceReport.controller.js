@@ -173,7 +173,7 @@ export const generateAISummary = async (req, res) => {
     try {
       aiResponse = JSON.parse(text);
     } catch (e) {
-      console.log("Failed to parse Gemini output:", jsonStr);
+      console.error("Failed to parse Gemini output:", text);
       aiResponse = {
         strengths: "Consistent performance.",
         weaknesses: "Needs more focus.",

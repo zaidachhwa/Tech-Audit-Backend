@@ -44,7 +44,7 @@ export const loginAdmin = async (req, res) => {
       admin: { id: admin._id, name: admin.name, email: admin.email },
     });
   } catch (err) {
-    console.log(err);
+    console.error("Error in admin login:", err);
     return res.status(500).json({ message: err.message });
   }
 };
