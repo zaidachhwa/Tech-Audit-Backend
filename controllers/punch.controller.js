@@ -31,6 +31,8 @@ export const getTeacherUpcomingLectures = async (req, res) => {
             scheduleId: String(sch._id),
             batchLectureId: null,
             title: lec.title || "Untitled Lecture",
+            topicId: String(lec.topicId || ""),
+            topicName: lec.topicName || "",
             subject: sch.subject || "Subject",
             batch: sch.batch || { batch_name: "N/A", batch_no: "" },
             date: lec.date,
@@ -69,6 +71,8 @@ export const getTeacherUpcomingLectures = async (req, res) => {
           scheduleId: null,
           batchLectureId: String(bl._id),
           title: bl.title || "Untitled Lecture",
+          topicId: String(bl.templateLecture || ""),
+          topicName: bl.title || "",
           subject: bl.syllabus?.subject || bl.syllabus?.name || "Subject",
           batch: bl.batch || { batch_name: "N/A", batch_no: "" },
           date: bl.dueDate,
@@ -346,3 +350,67 @@ export const getPunchLogs = async (req, res) => {
     return res.status(500).json({ message: err.message });
   }
 };
+
+/**
+ * Update Lecture Title and Topic
+ */
+export const updateLectureTopic = async (req, res) => {
+  try {
+    const { scheduleId, lectureId, batchLectureId, title, topicId, topicName } = req.body;
+
+    if (!title || !title.trim()) {
+      return res.status(400).json({ message: "Lecture Title is required." });
+    }
+    if (!topicId) {
+      return res.status(400).json({ message: "Topic selection is required." });
+    }
+
+    if (scheduleId && lectureId) {
+      const schedule = await Schedule.findById(scheduleId);
+      if (!schedule) {
+        return res.status(404).json({ message: "Schedule not found." });
+      }
+
+      const lec = schedule.lectures.id(lectureId);
+      if (!lec) {
+        return res.status(404).json({ message: "Lecture not found in schedule." });
+      }
+
+      lec.title = title.trim();
+      lec.topicId = topicId;
+      lec.topicName = topicName || "";
+
+      await schedule.save();
+
+      // Optionally update LecturePunchLog if it already exists
+      await LecturePunchLog.updateMany(
+        { lectureId },
+        { $set: { lectureTitle: title.trim(), subject: schedule.subject } }
+      );
+
+      return res.status(200).json({ message: "Lecture details updated successfully.", lecture: lec });
+    } else if (batchLectureId) {
+      const bl = await BatchLecture.findById(batchLectureId).populate("syllabus", "subject name");
+      if (!bl) {
+        return res.status(404).json({ message: "Batch Lecture not found." });
+      }
+
+      bl.title = title.trim();
+      bl.templateLecture = topicId; // Use templateLecture for BatchLecture topics
+
+      await bl.save();
+
+      await LecturePunchLog.updateMany(
+        { batchLectureId },
+        { $set: { lectureTitle: title.trim(), subject: bl.syllabus?.subject || bl.syllabus?.name || "Subject" } }
+      );
+
+      return res.status(200).json({ message: "Batch lecture details updated successfully.", lecture: bl });
+    } else {
+      return res.status(400).json({ message: "Schedule ID + Lecture ID or Batch Lecture ID is required." });
+    }
+  } catch (err) {
+    return res.status(500).json({ message: err.message });
+  }
+};
+

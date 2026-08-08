@@ -998,3 +998,45 @@ export const scheduleLecture = async (req, res) => {
     res.status(500).json({ message: err.message });
   }
 };
+
+/**
+ * Get topics for a specific batch and subject name
+ */
+export const getBatchSubjectTopics = async (req, res) => {
+  try {
+    const { batchId, subject } = req.query;
+
+    if (!batchId) {
+      return res.status(400).json({ message: "batchId is required" });
+    }
+
+    // Find all topics (BatchLecture) for this batch
+    const allBatchTopics = await BatchLecture.find({ batch: batchId })
+      .populate("assignedTo", "name email")
+      .populate("templateLecture", "title description")
+      .populate("syllabus", "subject name")
+      .sort({ order: 1, createdAt: 1 })
+      .lean();
+
+    if (!allBatchTopics || allBatchTopics.length === 0) {
+      return res.status(404).json({ message: "No syllabus topics configured for this batch" });
+    }
+
+    let topics = allBatchTopics;
+
+    // Robust matching for subject if provided
+    if (subject) {
+      const subjLower = subject.toLowerCase().trim();
+      topics = allBatchTopics.filter(t => {
+        if (!t.syllabus) return false;
+        const sName = (t.syllabus.subject || "").toLowerCase().trim();
+        const nName = (t.syllabus.name || "").toLowerCase().trim();
+        return sName === subjLower || nName === subjLower || sName.includes(subjLower) || subjLower.includes(sName);
+      });
+    }
+
+    res.json({ topics });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+};

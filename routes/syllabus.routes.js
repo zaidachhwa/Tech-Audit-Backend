@@ -23,7 +23,8 @@ import {
   updateLectureStatus,
   addLectureRemark,
   getSubjectProgress,
-  scheduleLecture
+  scheduleLecture,
+  getBatchSubjectTopics
 } from "../controllers/lecture.controller.js";
 import {
   verifyToken,
@@ -61,6 +62,7 @@ router.post("/assign-teacher", verifyToken, isAdmin, assignTeacherToBatchLecture
 router.patch("/assign-topic", verifyToken, isAdmin, assignTeacherToBatchLecture);
 router.get("/batch-topics", verifyToken, getBatchLectures);
 router.get("/batch-topics-teacher", verifyToken, isTeacher, getBatchLectures);
+router.get("/batch-subject-topics", verifyToken, getBatchSubjectTopics);
 router.get("/my-topics", verifyToken, isTeacher, getTeacherLectures);
 router.patch("/topic/:topicId/complete", verifyToken, isTeacher, updateLectureStatus);
 router.patch("/topic/:topicId/status", verifyToken, isTeacher, updateLectureStatus);

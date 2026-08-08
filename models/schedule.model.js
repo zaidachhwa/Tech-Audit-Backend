@@ -12,6 +12,8 @@ const lectureSchema = new mongoose.Schema({
     due_date: { type: Date },
     accept_submissions: { type: Boolean, default: true }
   },
+  topicId: { type: mongoose.Schema.Types.ObjectId, ref: "Lecture", default: null },
+  topicName: { type: String, default: "" },
   notes_shared: {
     type: mongoose.Schema.Types.Mixed,
     default: () => []
