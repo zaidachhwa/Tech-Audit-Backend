@@ -155,7 +155,6 @@ app.use("/api/performance-reports", performanceReportRoutes);
 app.use(errorHandler);
 
 const SERVER_PORT = process.env.PORT;
-console.log(SERVER_PORT);
 
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);

@@ -601,8 +601,18 @@ export const adminEditPunchTime = async (req, res) => {
       record.status = "PUNCHED_IN";
     }
 
-    // Recalculate Late Status
-    if (record.punchInTime) {
+    // Explicit status overrides
+    if (req.body.attendanceStatus) {
+      record.attendanceStatus = req.body.attendanceStatus;
+    }
+    if (req.body.lateApprovalStatus) {
+      record.lateApprovalStatus = req.body.lateApprovalStatus;
+      if (req.body.lateApprovalStatus === "Approved" || req.body.lateApprovalStatus === "Rejected") {
+        record.lateApprovedBy = adminId;
+        record.lateApprovedAt = new Date();
+      }
+    } else if (record.punchInTime && !req.body.attendanceStatus) {
+      // Recalculate Late Status
       const pinDate = new Date(record.punchInTime);
       const istTimeStr = pinDate.toLocaleTimeString('en-GB', { timeZone: 'Asia/Kolkata', hour12: false, hour: '2-digit', minute: '2-digit' });
       if (istTimeStr > "09:10") {

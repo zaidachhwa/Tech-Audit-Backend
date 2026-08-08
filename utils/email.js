@@ -27,15 +27,7 @@ export const sendStudentCredentials = async (email, name, password) => {
     from = `"${from.replace(/"/g, '')}" <${user}>`;
   }
 
-  console.log(`\n======================================================`);
-  console.log(`📧 [EMAIL SIMULATION] CREDENTIALS FOR STUDENT:`);
-  console.log(`Name:      ${name}`);
-  console.log(`Email/ID:  ${email}`);
-  console.log(`Password:  ${password}`);
-  console.log(`======================================================\n`);
-
   if (!host || !user || !pass) {
-    console.log("⚠️ SMTP email host/user/pass not configured in .env. Skipping actual SMTP mail send.");
     return { success: false, simulated: true };
   }
 
@@ -75,7 +67,6 @@ export const sendStudentCredentials = async (email, name, password) => {
 
   try {
     await transporter.sendMail(mailOptions);
-    console.log(`Credentials email sent successfully to ${email}`);
     return { success: true, simulated: false };
   } catch (error) {
     console.error(`Failed to send credentials email to ${email}:`, error);
@@ -99,7 +90,6 @@ export const sendEmail = async ({ to, subject, html }) => {
   }
 
   if (!host || !user || !pass) {
-    console.log(`⚠️ SMTP not configured. Simulated Email to ${to}: ${subject}`);
     return { success: false, simulated: true };
   }
 
@@ -143,15 +133,7 @@ export const sendParentWelcomeEmail = async (studentName, batch, studentEmail, p
     from = `"${from.replace(/"/g, '')}" <${user}>`;
   }
 
-  console.log(`\n======================================================`);
-  console.log(`📧 [EMAIL SIMULATION] WELCOME FOR PARENT:`);
-  console.log(`To:        ${parentEmail}`);
-  console.log(`Student:   ${studentName}`);
-  console.log(`Batch:     ${batch}`);
-  console.log(`======================================================\n`);
-
   if (!host || !user || !pass) {
-    console.log("⚠️ SMTP email host/user/pass not configured in .env. Skipping actual SMTP mail send.");
     return { success: false, simulated: true };
   }
 
@@ -192,7 +174,6 @@ export const sendParentWelcomeEmail = async (studentName, batch, studentEmail, p
 
   try {
     await transporter.sendMail(mailOptions);
-    console.log(`Parent welcome email sent successfully to ${parentEmail}`);
     return { success: true, simulated: false };
   } catch (error) {
     console.error(`Failed to send parent welcome email to ${parentEmail}:`, error);

@@ -672,11 +672,7 @@ export const updateSchedule = async (req, res) => {
  */
 export const deleteSchedule = async (req, res) => {
   try {
-    console.log("========== [DELETE SCHEDULE ENDPOINT HIT] ==========");
-    console.log("Req params:", req.params);
-    
     const { id: userId, role } = req.user;
-    console.log("User:", { userId, role });
     const schedule = await Schedule.findById(req.params.id);
     if (!schedule) {
       return res.status(404).json({ message: "Schedule not found" });
@@ -848,6 +844,17 @@ export const getLectureSubmissions = async (req, res) => {
     if (role === "student") {
       // Students can only see their own submissions
       query.student = userId;
+    } else if (role === "teacher") {
+      const schedule = await Schedule.findById(scheduleId);
+      if (!schedule) {
+        return res.status(404).json({ message: "Schedule not found" });
+      }
+      const lecture = schedule.lectures.id(lectureId);
+      const isPrimary = schedule.teacher?.toString() === userId;
+      const isLectureTeacher = lecture?.teacher?.toString() === userId;
+      if (!isPrimary && !isLectureTeacher) {
+        return res.status(403).json({ message: "Access denied. You can only view submissions for your own lectures." });
+      }
     }
 
     const submissions = await Submission.find(query)
@@ -979,16 +986,25 @@ export const getScheduleSubmissions = async (req, res) => {
       return res.status(404).json({ message: "Schedule not found" });
     }
 
+    const filter = { schedule: scheduleId };
+
     // Role-based security validation
     if (role === "teacher") {
-      const isPrimary = schedule.teacher.toString() === userId;
-      const isLectureTeacher = schedule.lectures.some(l => l.teacher && l.teacher.toString() === userId);
-      if (!isPrimary && !isLectureTeacher) {
+      const isPrimary = schedule.teacher?.toString() === userId;
+      const myLectureIds = schedule.lectures
+        .filter(l => l.teacher && l.teacher.toString() === userId)
+        .map(l => l._id.toString());
+
+      if (!isPrimary && myLectureIds.length === 0) {
         return res.status(403).json({ message: "Access denied. You can only view submissions for your own schedules." });
+      }
+
+      if (!isPrimary) {
+        filter.lectureId = { $in: myLectureIds };
       }
     }
 
-    const submissions = await Submission.find({ schedule: scheduleId })
+    const submissions = await Submission.find(filter)
       .populate("student", "name email")
       .lean();
 
@@ -1004,12 +1020,8 @@ export const getScheduleSubmissions = async (req, res) => {
  */
 export const deleteSubmission = async (req, res) => {
   try {
-    console.log("========== [DELETE SUBMISSION ENDPOINT HIT] ==========");
-    console.log("Req params:", req.params);
-
     const { submissionId } = req.params;
     const { id: userId, role } = req.user;
-    console.log("User:", { userId, role });
 
     const submission = await Submission.findById(submissionId);
     if (!submission) {
@@ -1040,12 +1052,8 @@ export const deleteSubmission = async (req, res) => {
  */
 export const deleteNotes = async (req, res) => {
   try {
-    console.log("========== [DELETE NOTES ENDPOINT HIT] ==========");
     const { scheduleId, lectureId, type } = req.params;
     const { id: userId, role } = req.user;
-    
-    console.log("Req params:", { scheduleId, lectureId, type });
-    console.log("User:", { userId, role });
 
     const schedule = await Schedule.findById(scheduleId);
     if (!schedule) {
@@ -1641,12 +1649,8 @@ export const updateLectureVenue = async (req, res) => {
 
 export const deleteLecture = async (req, res) => {
   try {
-    console.log("========== [DELETE LECTURE ENDPOINT HIT] ==========");
     const { scheduleId, lectureId } = req.params;
     const { id: userId, role } = req.user;
-    
-    console.log("Req params:", { scheduleId, lectureId });
-    console.log("User:", { userId, role });
 
     const schedule = await Schedule.findById(scheduleId);
     if (!schedule) {

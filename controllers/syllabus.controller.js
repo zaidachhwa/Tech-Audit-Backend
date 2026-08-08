@@ -169,7 +169,7 @@ export const assignSyllabusToBatch = async (req, res) => {
           syllabus: syllabusId,
           assignedBy: req.user.id,
           notes: notes || "",
-          dueDate: dueDate,
+          dueDate: dueDate || null,
         });
       } else {
         if (notes) batchSyllabus.notes = notes;

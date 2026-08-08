@@ -8,8 +8,6 @@ const cleanBatchName = (name) => name?.replace(/\s+/g, "").toUpperCase();
 
 export const createAssignment = async (req, res) => {
   try {
-    console.log("REQ BODY:", req.body);
-
     const {
       batchName,
       batchNumber,
@@ -92,8 +90,6 @@ export const createAssignment = async (req, res) => {
           debug: { batchName, batchNumber, batchId, cleanName }
         });
       }
-
-      console.log("✅ Found", students.length, "students");
 
       const assignmentPromises = students.map((s) => {
         return Assignment.create({

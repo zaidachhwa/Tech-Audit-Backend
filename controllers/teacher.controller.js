@@ -228,7 +228,7 @@ export const toggleTeacherStatus = async (req, res) => {
       teacher,
     });
   } catch (error) {
-    console.log(error);
+    console.error("Error toggling teacher status:", error);
     res.status(500).json({ message: "Server error" });
   }
 };
