@@ -1000,7 +1000,9 @@ export const scheduleLecture = async (req, res) => {
 };
 
 /**
- * Get topics for a specific batch and subject name
+ * Get topics for a specific batch and subject name.
+ * Step 1 – Resolve Syllabus ID(s) from the subject string via the "syllabuses" collection.
+ * Step 2 – Query BatchLecture by { batch, syllabus: $in [...ids] } and return ALL topics.
  */
 export const getBatchSubjectTopics = async (req, res) => {
   try {
@@ -1010,30 +1012,31 @@ export const getBatchSubjectTopics = async (req, res) => {
       return res.status(400).json({ message: "batchId is required" });
     }
 
-    // Find all topics (BatchLecture) for this batch
-    const allBatchTopics = await BatchLecture.find({ batch: batchId })
-      .populate("assignedTo", "name email")
+    let query = { batch: batchId };
+
+    if (subject && subject.trim()) {
+      const escaped = subject.trim().replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      const subjRegex = new RegExp(`^${escaped}$`, "i");
+
+      const matchedSyllabi = await Syllabus.find({
+        $or: [
+          { subject: { $regex: subjRegex } },
+          { name:    { $regex: subjRegex } },
+        ],
+      }).select("_id").lean();
+
+      if (!matchedSyllabi || matchedSyllabi.length === 0) {
+        return res.json({ topics: [] });
+      }
+
+      query.syllabus = { $in: matchedSyllabi.map((s) => s._id) };
+    }
+
+    const topics = await BatchLecture.find(query)
       .populate("templateLecture", "title description")
       .populate("syllabus", "subject name")
       .sort({ order: 1, createdAt: 1 })
       .lean();
-
-    if (!allBatchTopics || allBatchTopics.length === 0) {
-      return res.status(404).json({ message: "No syllabus topics configured for this batch" });
-    }
-
-    let topics = allBatchTopics;
-
-    // Robust matching for subject if provided
-    if (subject) {
-      const subjLower = subject.toLowerCase().trim();
-      topics = allBatchTopics.filter(t => {
-        if (!t.syllabus) return false;
-        const sName = (t.syllabus.subject || "").toLowerCase().trim();
-        const nName = (t.syllabus.name || "").toLowerCase().trim();
-        return sName === subjLower || nName === subjLower || sName.includes(subjLower) || subjLower.includes(sName);
-      });
-    }
 
     res.json({ topics });
   } catch (err) {
