@@ -26,15 +26,18 @@ export const getTeacherUpcomingLectures = async (req, res) => {
           (lec.teacher && String(lec.teacher?._id || lec.teacher) === String(teacherId));
 
         if (isAssigned) {
-          upcomingList.push({
-            _id: String(lec._id),
-            scheduleId: String(sch._id),
-            batchLectureId: null,
-            title: lec.title || "Untitled Lecture",
-            topicId: String(lec.topicId || ""),
-            topicName: lec.topicName || "",
-            subject: sch.subject || "Subject",
-            batch: sch.batch || { batch_name: "N/A", batch_no: "" },
+            const finalBatches = sch.batches?.length > 0 ? sch.batches : (sch.batch ? [sch.batch] : []);
+            const batchNameString = finalBatches.length > 0 ? finalBatches.map(b => b.batch_name || "").filter(Boolean).join(", ") : "N/A";
+            
+            upcomingList.push({
+              _id: String(lec._id),
+              scheduleId: String(sch._id),
+              batchLectureId: null,
+              title: lec.title || "Untitled Lecture",
+              topicId: String(lec.topicId || ""),
+              topicName: lec.topicName || "",
+              subject: sch.subject || "Subject",
+              batch: { batch_name: batchNameString, batch_no: "" },
             date: lec.date,
             time_slot: lec.time_slot || "",
             status: lec.status || "Scheduled",
@@ -148,7 +151,7 @@ export const punchInLecture = async (req, res) => {
 
       lectureTitle = lec.title;
       subject = schedule.subject;
-      batchId = schedule.batch;
+      batchId = schedule.batches && schedule.batches.length > 0 ? schedule.batches[0] : schedule.batch;
       scheduledDate = lec.date;
       timeSlot = lec.time_slot || "";
     } else if (batchLectureId) {

@@ -65,7 +65,8 @@ const lectureSchema = new mongoose.Schema({
 const scheduleSchema = new mongoose.Schema(
   {
     subject: { type: String, required: true },
-    batch: { type: mongoose.Schema.Types.ObjectId, ref: "Batch", required: true },
+    batch: { type: mongoose.Schema.Types.ObjectId, ref: "Batch" },
+    batches: [{ type: mongoose.Schema.Types.ObjectId, ref: "Batch" }],
     teacher: { type: mongoose.Schema.Types.ObjectId, ref: "Teacher", required: true },
     lectures: [lectureSchema],
     verificationStatus: {

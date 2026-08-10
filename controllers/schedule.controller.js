@@ -99,16 +99,18 @@ const validateTeacherConflicts = async (proposedLectures, currentScheduleId = nu
 
 export const createSchedule = async (req, res) => {
   try {
-    const { subject, batch, teacher, lectures } = req.body;
+    const { subject, batch, batchIds, teacher, lectures } = req.body;
+    
+    const finalBatches = batchIds && batchIds.length > 0 ? batchIds : (batch ? [batch] : []);
 
-    if (!subject || !batch || !teacher) {
-      return res.status(400).json({ message: "Subject, batch ID, and teacher ID are required." });
+    if (!subject || finalBatches.length === 0 || !teacher) {
+      return res.status(400).json({ message: "Subject, at least one batch ID, and teacher ID are required." });
     }
 
-    // Verify batch exists
-    const batchExists = await Batch.findById(batch);
-    if (!batchExists) {
-      return res.status(404).json({ message: "Target Batch not found." });
+    // Verify batches exist
+    const batchesExist = await Batch.find({ _id: { $in: finalBatches } });
+    if (batchesExist.length !== finalBatches.length) {
+      return res.status(404).json({ message: "One or more target Batches not found." });
     }
 
     // Past Date & Past Time Validation (Removed)
@@ -131,7 +133,8 @@ export const createSchedule = async (req, res) => {
 
     const newSchedule = await Schedule.create({
       subject,
-      batch,
+      batches: finalBatches,
+      batch: finalBatches[0], // Keep for backward compatibility
       teacher,
       lectures: lectures || [],
       verificationStatus: "approved",
@@ -171,6 +174,7 @@ export const createSchedule = async (req, res) => {
 
     const populated = await Schedule.findById(newSchedule._id)
       .populate("batch", "batch_name batch_no")
+      .populate("batches", "batch_name batch_no")
       .populate("teacher", "name email")
       .populate("lectures.teacher", "name email");
 
@@ -210,11 +214,13 @@ export const listSchedules = async (req, res) => {
         return res.status(200).json([]); // No matching batch found in system yet
       }
 
-      query.batch = studentBatch._id;
+      query.$or = query.$or || [];
+      query.$or.push({ batch: studentBatch._id }, { batches: studentBatch._id });
     }
 
     const schedules = await Schedule.find(query)
       .populate("batch", "batch_name batch_no")
+      .populate("batches", "batch_name batch_no")
       .populate("teacher", "name email")
       .populate("lectures.teacher", "name email")
       .populate("lectures.originalTeacher", "name")
@@ -258,12 +264,18 @@ export const listSchedules = async (req, res) => {
     // Build lookup set of existing lectures in Schedule documents to prevent double-display
     const existingScheduleLectures = new Set();
     schedules.forEach((sch) => {
-      const bId = sch.batch?._id ? sch.batch._id.toString() : (sch.batch ? sch.batch.toString() : "");
+      const bIds = [];
+      if (sch.batches && sch.batches.length > 0) {
+        sch.batches.forEach(b => bIds.push(b._id ? b._id.toString() : b.toString()));
+      } else if (sch.batch) {
+        bIds.push(sch.batch._id ? sch.batch._id.toString() : sch.batch.toString());
+      }
+      
       const subj = (sch.subject || "").trim().toLowerCase();
       (sch.lectures || []).forEach((lec) => {
         const title = (lec.title || "").trim().toLowerCase();
-        if (bId && subj && title) {
-          existingScheduleLectures.add(`${bId}_${subj}_${title}`);
+        if (subj && title) {
+          bIds.forEach(bId => existingScheduleLectures.add(`${bId}_${subj}_${title}`));
         }
       });
     });
@@ -512,7 +524,7 @@ export const updateBatchLectureFromScheduler = async (req, res) => {
 export const updateSchedule = async (req, res) => {
   try {
     const { id: userId, role } = req.user;
-    const { subject, batch, teacher, lectures } = req.body;
+    const { subject, batch, batchIds, teacher, lectures } = req.body;
 
     const schedule = await Schedule.findById(req.params.id);
     if (!schedule) {
@@ -553,7 +565,11 @@ export const updateSchedule = async (req, res) => {
     }
     // Apply updates
     if (subject) schedule.subject = subject;
-    if (batch) schedule.batch = batch;
+    const finalBatches = batchIds && batchIds.length > 0 ? batchIds : (batch ? [batch] : null);
+    if (finalBatches) {
+      schedule.batches = finalBatches;
+      schedule.batch = finalBatches[0]; // Keep for backward compatibility
+    }
     if (teacher) schedule.teacher = teacher;
 
     // Detect Saturday lectures that need announcements before saving new lectures list
@@ -600,7 +616,7 @@ export const updateSchedule = async (req, res) => {
 
     if (newSaturdayLectures.length > 0) {
       try {
-        const batchObj = await Batch.findById(schedule.batch);
+        const batchIds = schedule.batches && schedule.batches.length > 0 ? schedule.batches : (schedule.batch ? [schedule.batch] : []);
         const finalSubject = schedule.subject;
         const finalTeacher = schedule.teacher;
         
@@ -609,13 +625,19 @@ export const updateSchedule = async (req, res) => {
           const title = `Saturday Session Scheduled: ${finalSubject}`;
           const message = `A Saturday lecture session has been scheduled for "${finalSubject}" on ${formattedDate}. Please verify the timing and details.`;
           
-          await Announcement.create({
-            teacher: finalTeacher,
-            title,
-            message,
-            batch: batchObj ? batchObj.batch_name : "All Batches",
-            priority: "important"
-          });
+            let batchNames = "All Batches";
+            if (batchIds.length > 0) {
+              const batchObjs = await Batch.find({ _id: { $in: batchIds } });
+              batchNames = batchObjs.map(b => b.batch_name).join(", ");
+            }
+
+            await Announcement.create({
+              teacher: finalTeacher,
+              title,
+              message,
+              batch: batchNames,
+              priority: "important"
+            });
         }
       } catch (announceErr) {
         console.error("Failed to generate automated Saturday announcement on update:", announceErr);
@@ -625,8 +647,10 @@ export const updateSchedule = async (req, res) => {
     // Send Push Notifications for Venue Switches
     if (venueSwitches.length > 0) {
       try {
-        const batchObj = await Batch.findById(schedule.batch);
-        if (batchObj) {
+        const batchIds = schedule.batches && schedule.batches.length > 0 ? schedule.batches : (schedule.batch ? [schedule.batch] : []);
+        const batchObjs = await Batch.find({ _id: { $in: batchIds } });
+        
+        for (const batchObj of batchObjs) {
            for (const lec of venueSwitches) {
              await sendPushToBatch(batchObj.batch_name, {
                title: "Venue Changed",
@@ -654,6 +678,7 @@ export const updateSchedule = async (req, res) => {
 
     const populated = await Schedule.findById(schedule._id)
       .populate("batch", "batch_name batch_no")
+      .populate("batches", "batch_name batch_no")
       .populate("teacher", "name email")
       .populate("lectures.teacher", "name email");
 
