@@ -15,9 +15,9 @@ export const generateFeedback = async (req, res) => {
       return res.status(400).json({ message: "Parameters required for generating feedback." });
     }
 
-    const apiKey = process.env.GEMINI_API_KEY;
+    const apiKey = process.env.GROQ_API_KEY;
     if (!apiKey) {
-      return res.status(500).json({ message: "GEMINI_API_KEY is not configured in the backend." });
+      return res.status(500).json({ message: "GROQ_API_KEY is not configured in the backend." });
     }
 
     let prompt = "Analyze the student's performance based on the following parameters and scores:\n";
@@ -29,14 +29,21 @@ export const generateFeedback = async (req, res) => {
     prompt += "The 'points' array MUST contain exactly 3 concise, constructive feedback sentences. The 'overallRemarks' MUST contain a 2-3 sentence overall summary of the student's performance.";
 
     const response = await axios.post(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`,
+      `https://api.groq.com/openai/v1/chat/completions`,
       {
-        contents: [{ parts: [{ text: prompt }] }],
-        generationConfig: { responseMimeType: "application/json" }
+        model: "llama-3.3-70b-versatile",
+        messages: [{ role: "user", content: prompt }],
+        response_format: { type: "json_object" }
+      },
+      {
+        headers: {
+          "Authorization": `Bearer ${apiKey}`,
+          "Content-Type": "application/json"
+        }
       }
     );
 
-    const text = response.data.candidates[0].content.parts[0].text;
+    const text = response.data.choices[0].message.content;
     const parsed = JSON.parse(text);
     
     let points = Array.isArray(parsed.points) ? parsed.points : [];
@@ -45,7 +52,7 @@ export const generateFeedback = async (req, res) => {
 
     return res.status(200).json({ feedback: points, overallRemarks: parsed.overallRemarks || "" });
   } catch (err) {
-    console.error("Gemini API Error:", err.response?.data || err.message);
+    console.error("Groq API Error:", err.response?.data || err.message);
     return res.status(500).json({ message: "Failed to generate feedback via AI." });
   }
 };

@@ -132,9 +132,9 @@ export const generateAISummary = async (req, res) => {
     const report = await PerformanceReport.findById(reportId).populate("student");
     if (!report) return res.status(404).json({ message: "Report not found" });
 
-    const apiKey = process.env.GEMINI_API_KEY;
+    const apiKey = process.env.GROQ_API_KEY;
     if (!apiKey) {
-      return res.status(400).json({ message: "GEMINI_API_KEY is missing." });
+      return res.status(400).json({ message: "GROQ_API_KEY is missing." });
     }
 
     const prompt = `
@@ -160,20 +160,27 @@ export const generateAISummary = async (req, res) => {
     `;
 
     const response = await axios.post(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`,
+      `https://api.groq.com/openai/v1/chat/completions`,
       {
-        contents: [{ parts: [{ text: prompt }] }],
-        generationConfig: { responseMimeType: "application/json" }
+        model: "llama-3.3-70b-versatile",
+        messages: [{ role: "user", content: prompt }],
+        response_format: { type: "json_object" }
+      },
+      {
+        headers: {
+          "Authorization": `Bearer ${apiKey}`,
+          "Content-Type": "application/json"
+        }
       }
     );
 
-    const text = response.data.candidates[0].content.parts[0].text;
+    const text = response.data.choices[0].message.content;
     
     let aiResponse;
     try {
       aiResponse = JSON.parse(text);
     } catch (e) {
-      console.error("Failed to parse Gemini output:", text);
+      console.error("Failed to parse Groq output:", text);
       aiResponse = {
         strengths: "Consistent performance.",
         weaknesses: "Needs more focus.",
