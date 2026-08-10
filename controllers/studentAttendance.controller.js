@@ -459,9 +459,13 @@ export const getStudentAttendanceLogs = async (req, res) => {
     // Date filtering
     if (startDate || endDate) {
       const dateCond = {};
-      if (startDate) dateCond.$gte = new Date(startDate);
+      if (startDate) {
+        const [y, m, d] = startDate.split('-');
+        dateCond.$gte = new Date(y, m - 1, d);
+      }
       if (endDate) {
-        const ed = new Date(endDate);
+        const [y, m, d] = endDate.split('-');
+        const ed = new Date(y, m - 1, d);
         ed.setHours(23, 59, 59, 999);
         dateCond.$lte = ed;
       }
@@ -490,7 +494,11 @@ export const getStudentAttendanceLogs = async (req, res) => {
 
     // Inject absent records for un-punched students for single day or today
     if (isSingleDay || isNoDate) {
-      const targetDate = isSingleDay ? new Date(startDate) : new Date();
+      let targetDate = new Date();
+      if (isSingleDay) {
+        const [y, m, d] = startDate.split('-');
+        targetDate = new Date(y, m - 1, d);
+      }
       targetDate.setHours(0, 0, 0, 0);
 
       let studentQuery = {};
@@ -568,9 +576,28 @@ export const adminEditPunchTime = async (req, res) => {
   try {
     const { id } = req.params;
     const adminId = req.user.id;
-    const { punchInTime, punchOutTime, reason } = req.body;
+    const { punchInTime, punchOutTime, reason, date, batch, student } = req.body;
 
-    const record = await StudentAttendance.findById(id);
+    let record;
+    if (id.startsWith("missing_")) {
+      const studentId = id.replace("missing_", "");
+      const d = new Date(date);
+      d.setHours(0, 0, 0, 0);
+
+      record = await StudentAttendance.findOne({ student: studentId, date: d });
+      if (!record) {
+        record = new StudentAttendance({
+          student: studentId,
+          batch: batch,
+          date: d,
+          status: "NOT_PUNCHED",
+          attendanceStatus: "Absent",
+        });
+      }
+    } else {
+      record = await StudentAttendance.findById(id);
+    }
+
     if (!record) {
       return res.status(404).json({ message: "Attendance record not found." });
     }
@@ -631,7 +658,7 @@ export const adminEditPunchTime = async (req, res) => {
     await record.save();
 
     // Populate before sending back
-    const updated = await StudentAttendance.findById(id)
+    const updated = await StudentAttendance.findById(record._id)
       .populate("student", "name email batch_name batch_no rollNo")
       .populate("batch", "batch_name batch_no")
       .lean();
