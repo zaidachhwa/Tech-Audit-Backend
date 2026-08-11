@@ -64,25 +64,19 @@ function getLectureStatus(punchInTime, punchOutTime, lectureDate, timeSlot) {
   if (!punchInTime) return "Absent";
 
   const parsed = parseTimeSlot(timeSlot);
-  if (!parsed) return "Present"; // If we can't parse the slot, default present if punched in
+  if (!parsed) return "Present"; 
 
-  const { startHour, startMin, endHour, endMin } = parsed;
+  if (punchOutTime) {
+    const { startHour, startMin } = parsed;
+    const d = new Date(lectureDate);
+    const lectureStart = new Date(d.getFullYear(), d.getMonth(), d.getDate(), startHour, startMin, 0);
 
-  // Build absolute Date objects for lecture start & end on the given date
-  const d = new Date(lectureDate);
-  const lectureStart = new Date(d.getFullYear(), d.getMonth(), d.getDate(), startHour, startMin, 0);
-  const lectureEnd = new Date(d.getFullYear(), d.getMonth(), d.getDate(), endHour, endMin, 0);
-
-  // Student must be punched in before or at lecture start
-  const punchIn = new Date(punchInTime);
-  if (punchIn > lectureStart) return "Absent";
-
-  // If student hasn't punched out yet, they are considered present (still in)
-  if (!punchOutTime) return "Present";
-
-  // Student must punch out at or after lecture end
-  const punchOut = new Date(punchOutTime);
-  if (punchOut < lectureEnd) return "Absent";
+    const punchOut = new Date(punchOutTime);
+    // If the student punched out before this lecture even started, they are absent for it
+    if (punchOut < lectureStart) {
+      return "Absent";
+    }
+  }
 
   return "Present";
 }
@@ -281,6 +275,7 @@ export const studentPunchIn = async (req, res) => {
       lateAppStatus = "Pending";
     }
 
+    let savedRecord;
     if (existing) {
       existing.punchInTime = now;
       existing.status = "PUNCHED_IN";
@@ -289,22 +284,32 @@ export const studentPunchIn = async (req, res) => {
       existing.attendanceStatus = attStatus;
       existing.lateApprovalStatus = lateAppStatus;
       await existing.save();
-      return res.json({ message: "Punched In successfully!", record: existing });
+      savedRecord = existing;
+    } else {
+      savedRecord = await StudentAttendance.create({
+        student: studentId,
+        batch: batch._id,
+        date: dateKey,
+        punchInTime: now,
+        status: "PUNCHED_IN",
+        punchInPhoto: photoUrl,
+        punchInLocation: { lat, lng },
+        attendanceStatus: attStatus,
+        lateApprovalStatus: lateAppStatus,
+      });
     }
 
-    const record = await StudentAttendance.create({
-      student: studentId,
-      batch: batch._id,
-      date: dateKey,
-      punchInTime: now,
-      status: "PUNCHED_IN",
-      punchInPhoto: photoUrl,
-      punchInLocation: { lat, lng },
-      attendanceStatus: attStatus,
-      lateApprovalStatus: lateAppStatus,
-    });
+    if (attStatus === "Late") {
+      // Calculate minutes late (Expected time is 09:00 AM)
+      const expectedTime = new Date(now);
+      expectedTime.setHours(9, 0, 0, 0);
+      let diffMins = Math.floor((now.getTime() - expectedTime.getTime()) / 60000);
+      if (diffMins < 0) diffMins = 0; // fallback just in case
+      const parentMsg = `Your child punched in late today at ${istTimeStr}. They were ${diffMins} minutes late from the expected time (09:00 AM).`;
+      await notifyParents([studentId], "Late Attendance Alert", parentMsg);
+    }
 
-    return res.json({ message: "Punched In successfully!", record });
+    return res.json({ message: "Punched In successfully!", record: savedRecord });
   } catch (err) {
     console.error("Punch In Error:", err);
     if (err.code === 11000) {
@@ -360,16 +365,7 @@ export const studentPunchOut = async (req, res) => {
       url: "/student/attendance"
     });
 
-    // Notify Parents with daily summary
-    let parentMsg = `Attendance Summary for ${today.toDateString()}:\n`;
-    if (record.lectureAttendance && record.lectureAttendance.length > 0) {
-      record.lectureAttendance.forEach(lec => {
-        parentMsg += `- ${lec.lectureTitle} (${lec.timeSlot}): ${lec.status}\n`;
-      });
-    } else {
-      parentMsg += "Student punched in and out successfully today.";
-    }
-    await notifyParents([studentId], "Daily Attendance Summary", parentMsg);
+
 
     return res.json({ message: "Punched Out successfully!", record });
   } catch (err) {

@@ -3,6 +3,8 @@ import Homework from "../models/homework.model.js";
 import Project from "../models/project.model.js";
 import { Schedule } from "../models/schedule.model.js";
 import { BatchLecture } from "../models/batchLecture.model.js";
+import { Student } from "../models/student.model.js";
+import { StudentAttendance } from "../models/studentAttendance.model.js";
 import { sendPushToBatch, sendPushToUser } from "./pushNotification.service.js";
 import { notifyParents } from "./parentNotification.service.js";
 
@@ -184,6 +186,38 @@ export const initCronJobs = () => {
       }
     } catch (error) {
       console.error("Error in project due cron:", error);
+    }
+  });
+
+  // Check for Absent Students (run daily at 5:00 PM)
+  cron.schedule("0 17 * * *", async () => {
+    try {
+      const today = new Date();
+      const dateKey = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+      
+      const allStudents = await Student.find({ role: "student" });
+      if (!allStudents || allStudents.length === 0) return;
+      
+      const presentRecords = await StudentAttendance.find({
+        date: dateKey,
+        punchInTime: { $ne: null }
+      });
+      
+      const presentStudentIds = presentRecords.map(r => r.student.toString());
+      
+      const absentStudentIds = allStudents
+        .filter(s => !presentStudentIds.includes(s._id.toString()))
+        .map(s => s._id);
+        
+      if (absentStudentIds.length > 0) {
+        await notifyParents(
+          absentStudentIds,
+          "Daily Attendance Alert: Absent",
+          `This is an automated alert. Your child was marked as ABSENT today (${today.toDateString()}) as they did not punch in at the institute.`
+        );
+      }
+    } catch (error) {
+      console.error("Error in absent check cron:", error);
     }
   });
 };
