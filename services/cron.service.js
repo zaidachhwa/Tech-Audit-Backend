@@ -193,7 +193,8 @@ export const initCronJobs = () => {
   cron.schedule("0 17 * * *", async () => {
     try {
       const today = new Date();
-      const dateKey = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+      const istStr = today.toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata", year: "numeric", month: "2-digit", day: "2-digit" });
+      const dateKey = new Date(`${istStr}T00:00:00.000Z`);
       
       const allStudents = await Student.find({ role: "student" });
       if (!allStudents || allStudents.length === 0) return;

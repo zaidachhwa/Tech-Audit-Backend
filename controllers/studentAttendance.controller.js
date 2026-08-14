@@ -163,6 +163,15 @@ async function recalcLectureAttendance(attendanceDoc) {
 import Settings from "../models/settings.model.js";
 
 /**
+ * Helper to get a stable, timezone-independent midnight Date object for IST/local
+ */
+function getMidnightDate() {
+  const now = new Date();
+  const istStr = now.toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata", year: "numeric", month: "2-digit", day: "2-digit" });
+  return new Date(`${istStr}T00:00:00.000Z`);
+}
+
+/**
  * Calculate distance between two coordinates in meters using Haversine formula
  */
 function getDistanceInMeters(lat1, lon1, lat2, lon2) {
@@ -251,7 +260,7 @@ export const studentPunchIn = async (req, res) => {
     }
 
     const today = new Date();
-    const dateKey = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+    const dateKey = getMidnightDate();
 
     const existing = await StudentAttendance.findOne({ student: studentId, date: dateKey });
     
@@ -339,7 +348,7 @@ export const studentPunchOut = async (req, res) => {
     const photoUrl = `/uploads/${req.file.filename}`;
 
     const today = new Date();
-    const dateKey = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+    const dateKey = getMidnightDate();
 
     const record = await StudentAttendance.findOne({ student: studentId, date: dateKey });
 
@@ -381,7 +390,7 @@ export const getTodayStatus = async (req, res) => {
     const studentId = req.user.id;
 
     const today = new Date();
-    const dateKey = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+    const dateKey = getMidnightDate();
 
     const record = await StudentAttendance.findOne({ student: studentId, date: dateKey })
       .populate("student", "name email")
@@ -577,8 +586,8 @@ export const adminEditPunchTime = async (req, res) => {
     let record;
     if (id.startsWith("missing_")) {
       const studentId = id.replace("missing_", "");
-      const d = new Date(date);
-      d.setHours(0, 0, 0, 0);
+      // Ensure date string translates to strict UTC midnight, avoiding local timezone shift.
+      const d = new Date(`${date.split('T')[0]}T00:00:00.000Z`);
 
       record = await StudentAttendance.findOne({ student: studentId, date: d });
       if (!record) {

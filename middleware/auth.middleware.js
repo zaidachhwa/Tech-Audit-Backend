@@ -1,6 +1,7 @@
 import jwt from "jsonwebtoken";
 import { Admin } from "../models/admin.model.js";
 import { Student } from "../models/student.model.js";
+import { JWT_SECRET } from "../config/env.js";
 
 export const verifyToken = (req, res, next) => {
   const authHeader = req.headers.authorization || req.headers.Authorization;
@@ -9,10 +10,14 @@ export const verifyToken = (req, res, next) => {
 
   const token = authHeader.split(" ")[1]; 
   try {
-    const payload = jwt.verify(token, process.env.JWT_SECRET);
+    const payload = jwt.verify(token, JWT_SECRET);
     req.user = { id: payload.id, role: payload.role };
     next();
   } catch (err) {
+    console.error("JWT Verify Error:", err.message, "| Token:", token);
+    if (err.name === "TokenExpiredError") {
+      return res.status(401).json({ message: "Token expired" });
+    }
     return res.status(401).json({ message: "Invalid token" });
   }
 };

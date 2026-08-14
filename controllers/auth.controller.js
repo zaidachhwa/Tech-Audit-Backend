@@ -7,10 +7,11 @@ import { JWT_SECRET } from "../config/env.js";
 
 export const login = async (req, res) => {
   try {
-    const { email, password } = req.body;
+    let { email, password } = req.body;
     if (!email || !password) {
       return res.status(400).json({ message: "Email & password required" });
     }
+    email = email.toLowerCase();
 
     let user = null;
     let role = "";
@@ -184,10 +185,11 @@ export const changePassword = async (req, res) => {
 
 export const forgotPassword = async (req, res) => {
   try {
-    const { email } = req.body;
+    let { email } = req.body;
     if (!email) {
       return res.status(400).json({ message: "Email is required" });
     }
+    email = email.toLowerCase();
 
     let user = await Admin.findOne({ email }) || await Teacher.findOne({ email }) || await Student.findOne({ email });
     if (!user) {
@@ -203,10 +205,11 @@ export const forgotPassword = async (req, res) => {
 
 export const resetPassword = async (req, res) => {
   try {
-    const { email, resetToken, newPassword } = req.body;
+    let { email, resetToken, newPassword } = req.body;
     if (!email || !newPassword) {
       return res.status(400).json({ message: "Email and newPassword are required" });
     }
+    email = email.toLowerCase();
 
     let Model = null;
     let user = await Admin.findOne({ email });

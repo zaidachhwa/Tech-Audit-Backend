@@ -17,7 +17,7 @@ const JWT_SECRET = process.env.JWT_SECRET;
 /* Register student */
 export const registerStudent = async (req, res) => {
   try {
-    const {
+    let {
       name,
       email,
       password,
@@ -48,6 +48,8 @@ export const registerStudent = async (req, res) => {
     if (!name || !email || !batch_name || !batch_no) {
       return res.status(400).json({ message: "Name, email, and batch name/number are required" });
     }
+
+    email = email.toLowerCase();
 
     // Detect if this is an admin/teacher action by decoding authorization header
     let isAdminAction = false;
@@ -146,10 +148,12 @@ export const registerStudent = async (req, res) => {
 /* Login student */
 export const loginStudent = async (req, res) => {
   try {
-    const { email, password } = req.body;
+    let { email, password } = req.body;
 
     if (!email || !password)
       return res.status(400).json({ message: "Email & password required" });
+
+    email = email.toLowerCase();
 
     const student = await Student.findOne({ email });
     if (!student)
@@ -470,15 +474,23 @@ export const deleteStudent = async (req, res) => {
 export const updateStudent = async (req, res) => {
   try {
     const { id } = req.params;
-    const { 
-      name, email, password, batch_name, batch_no, phoneNo, parentEmail, parentPhoneNo, 
+    let {
+      name, email, password, batch_name, batch_no, phoneNo, parentEmail, parentPhoneNo,
       fatherName, fatherPhone, fatherEmail, motherName, motherPhone, motherEmail,
-      isActive, customFields 
+      isActive, customFields,
+      enrollmentNo, rollNo, course, semester, department, dob, gender
     } = req.body;
+
+    console.log("updateStudent called for ID:", id);
+    console.log("req.body email:", email);
+
+    if (email) email = email.toLowerCase();
 
     const student = await Student.findById(id);
     if (!student)
       return res.status(404).json({ message: "Student not found" });
+
+    console.log("Current DB email:", student.email);
 
     if (email && email !== student.email) {
       const existing = await Student.findOne({ email });
@@ -506,11 +518,22 @@ export const updateStudent = async (req, res) => {
     if (motherPhone !== undefined) student.motherPhone = motherPhone;
     if (motherEmail !== undefined) student.motherEmail = motherEmail;
     if (isActive !== undefined) student.isActive = isActive;
+    
+    // Additional Academic / Personal fields
+    if (enrollmentNo !== undefined) student.enrollmentNo = enrollmentNo;
+    if (rollNo !== undefined) student.rollNo = rollNo;
+    if (course !== undefined) student.course = course;
+    if (semester !== undefined) student.semester = semester;
+    if (department !== undefined) student.department = department;
+    if (dob !== undefined) student.dob = dob;
+    if (gender !== undefined) student.gender = gender;
     if (customFields) {
       student.customFields = { ...student.customFields, ...customFields };
     }
 
+    console.log("Email right before save:", student.email);
     await student.save();
+    console.log("Student saved successfully!");
 
     const batchChanged =
       batch_name !== oldBatchName || batch_no !== oldBatchNo;
@@ -579,7 +602,9 @@ export const updateMe = async (req, res) => {
 
     if (!userId) return res.status(401).json({ message: "Unauthorized" });
 
-    const { name, email, currentPassword, newPassword } = req.body;
+    let { name, email, currentPassword, newPassword } = req.body;
+
+    if (email) email = email.toLowerCase();
 
     const student = await Student.findById(userId);
     if (!student)
