@@ -308,7 +308,8 @@ export const studentPunchIn = async (req, res) => {
       });
     }
 
-    if (attStatus === "Late") {
+    const dayOfWeek = now.getDay();
+    if (attStatus === "Late" && dayOfWeek !== 0 && dayOfWeek !== 6) {
       // Calculate minutes late (Expected time is 09:00 AM)
       const expectedTime = new Date(now);
       expectedTime.setHours(9, 0, 0, 0);
@@ -681,7 +682,13 @@ export const adminEditPunchTime = async (req, res) => {
            parentMsg += `- ${lec.lectureTitle} (${lec.timeSlot}): ${lec.status}\n`;
          });
        }
-       await notifyParents([updated.student._id], "Attendance Updated", parentMsg);
+       
+       const attDate = updated.date ? new Date(updated.date) : new Date();
+       const dayOfWeek = attDate.getDay();
+       
+       if ((updated.attendanceStatus === "Absent" || updated.attendanceStatus === "Late") && dayOfWeek !== 0 && dayOfWeek !== 6) {
+         await notifyParents([updated.student._id], "Attendance Updated", parentMsg);
+       }
     }
 
     return res.json({ message: "Attendance record updated successfully.", record: updated });
