@@ -122,7 +122,24 @@ export const sendEmail = async ({ to, subject, html }) => {
 /**
  * Sends a welcome email to parents upon student account creation.
  */
-export const sendParentWelcomeEmail = async (studentName, batch, studentEmail, parentEmail) => {
+export const sendParentWelcomeEmail = async (studentNameOrOptions, batch, studentEmail, parentEmail) => {
+  let name = "";
+  let batchName = "";
+  let email = "";
+  let pEmail = null;
+
+  if (typeof studentNameOrOptions === "object" && studentNameOrOptions !== null) {
+    name = studentNameOrOptions.studentName || "";
+    batchName = studentNameOrOptions.courseName || studentNameOrOptions.batch || "";
+    email = studentNameOrOptions.studentEmail || "";
+    pEmail = studentNameOrOptions.parentEmail;
+  } else {
+    name = studentNameOrOptions || "";
+    batchName = batch || "";
+    email = studentEmail || "";
+    pEmail = parentEmail;
+  }
+
   const host = process.env.EMAIL_HOST;
   const port = process.env.EMAIL_PORT;
   const user = process.env.EMAIL_USER;
@@ -133,7 +150,7 @@ export const sendParentWelcomeEmail = async (studentName, batch, studentEmail, p
     from = `"${from.replace(/"/g, '')}" <${user}>`;
   }
 
-  if (!host || !user || !pass) {
+  if (!host || !user || !pass || !pEmail) {
     return { success: false, simulated: true };
   }
 
@@ -149,34 +166,44 @@ export const sendParentWelcomeEmail = async (studentName, batch, studentEmail, p
 
   const frontendUrl = process.env.FRONTEND_URL || 'https://tech.nexcoreinstitute.org';
 
-  const mailOptions = {
-    from,
-    to: parentEmail,
-    subject: "Student Account Created Successfully - Tech Audit Portal",
-    html: `
-      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: auto; padding: 20px; border: 1px solid #e2e8f0; border-radius: 8px;">
-        <h2 style="color: #10B981; margin-bottom: 20px;">Nexcore Institute of Technology</h2>
-        <p>Dear Parent,</p>
-        <p>We are writing to inform you that a student account has been successfully created for your child, <strong>${studentName}</strong>, at Nexcore Institute of Technology.</p>
-        
-        <div style="background-color: #f8fafc; padding: 15px; border-radius: 6px; margin: 20px 0; border: 1px solid #cbd5e1; line-height: 1.6;">
-          <p style="margin: 5px 0;"><strong>Student Name:</strong> ${studentName}</p>
-          <p style="margin: 5px 0;"><strong>Batch:</strong> ${batch}</p>
-          <p style="margin: 5px 0;"><strong>Student Email:</strong> ${studentEmail}</p>
-          <p style="margin: 5px 0;"><strong>Portal Login:</strong> <a href="${frontendUrl}">${frontendUrl}</a></p>
-        </div>
-        
-        <p>They can now log into the portal to access their schedules, syllabus, and study materials. If you have any questions or require assistance, please contact the administration office.</p>
-        <p style="margin-top: 30px; border-top: 1px solid #e2e8f0; padding-top: 15px;">Best regards,<br>Tech Audit Administration</p>
-      </div>
-    `,
-  };
+  // Normalize parent emails into array
+  const recipients = Array.isArray(pEmail) ? pEmail : [pEmail];
 
-  try {
-    await transporter.sendMail(mailOptions);
-    return { success: true, simulated: false };
-  } catch (error) {
-    console.error(`Failed to send parent welcome email to ${parentEmail}:`, error);
-    return { success: false, error: error.message };
+  const results = [];
+  for (const recipient of recipients) {
+    if (!recipient || typeof recipient !== "string" || !recipient.trim()) continue;
+
+    const mailOptions = {
+      from,
+      to: recipient.trim(),
+      subject: "Student Account Created Successfully - Tech Audit Portal",
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: auto; padding: 20px; border: 1px solid #e2e8f0; border-radius: 8px;">
+          <h2 style="color: #10B981; margin-bottom: 20px;">Nexcore Institute of Technology</h2>
+          <p>Dear Parent,</p>
+          <p>We are writing to inform you that a student account has been successfully created for your child, <strong>${name}</strong>, at Nexcore Institute of Technology.</p>
+          
+          <div style="background-color: #f8fafc; padding: 15px; border-radius: 6px; margin: 20px 0; border: 1px solid #cbd5e1; line-height: 1.6;">
+            <p style="margin: 5px 0;"><strong>Student Name:</strong> ${name}</p>
+            ${batchName ? `<p style="margin: 5px 0;"><strong>Batch:</strong> ${batchName}</p>` : ''}
+            ${email ? `<p style="margin: 5px 0;"><strong>Student Email:</strong> ${email}</p>` : ''}
+            <p style="margin: 5px 0;"><strong>Portal Login:</strong> <a href="${frontendUrl}">${frontendUrl}</a></p>
+          </div>
+          
+          <p>They can now log into the portal to access their schedules, syllabus, and study materials. If you have any questions or require assistance, please contact the administration office.</p>
+          <p style="margin-top: 30px; border-top: 1px solid #e2e8f0; padding-top: 15px;">Best regards,<br>Tech Audit Administration</p>
+        </div>
+      `,
+    };
+
+    try {
+      await transporter.sendMail(mailOptions);
+      results.push({ email: recipient, success: true, simulated: false });
+    } catch (error) {
+      console.error(`Failed to send parent welcome email to ${recipient}:`, error);
+      results.push({ email: recipient, success: false, error: error.message });
+    }
   }
+
+  return { success: true, results };
 };

@@ -28,9 +28,11 @@ export const RegisterAdmin = async (req, res) => {
 
 export const loginAdmin = async (req, res) => {
   try {
-    const { email, password } = req.body;
+    let { email, password } = req.body;
     if (!email || !password)
       return res.status(400).json({ message: "Email & password required" });
+    email = String(email).trim().toLowerCase();
+    password = String(password).trim();
     const admin = await Admin.findOne({ email });
     if (!admin) return res.status(400).json({ message: "Invalid credentials" });
     const ok = await bcrypt.compare(password, admin.password);

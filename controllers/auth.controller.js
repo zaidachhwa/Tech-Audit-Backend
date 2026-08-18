@@ -11,7 +11,8 @@ export const login = async (req, res) => {
     if (!email || !password) {
       return res.status(400).json({ message: "Email & password required" });
     }
-    email = email.toLowerCase();
+    email = String(email).trim().toLowerCase();
+    password = String(password).trim();
 
     let user = null;
     let role = "";

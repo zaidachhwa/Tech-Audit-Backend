@@ -85,6 +85,14 @@ export const bulkImportStudents = async (req, res) => {
     
     let phoneIndex = headers.indexOf("contact no");
     if (phoneIndex === -1) phoneIndex = headers.indexOf("phone");
+    if (phoneIndex === -1) phoneIndex = headers.indexOf("student phone");
+    if (phoneIndex === -1) phoneIndex = headers.indexOf("student contact");
+    if (phoneIndex === -1) phoneIndex = headers.indexOf("student contact no");
+    if (phoneIndex === -1) phoneIndex = headers.indexOf("phone no");
+    if (phoneIndex === -1) phoneIndex = headers.indexOf("phoneno");
+    if (phoneIndex === -1) phoneIndex = headers.indexOf("mobile");
+    if (phoneIndex === -1) phoneIndex = headers.indexOf("mobile no");
+    if (phoneIndex === -1) phoneIndex = headers.indexOf("student mobile");
     
     let fatherNameIndex = headers.indexOf("father name");
     if (fatherNameIndex === -1) fatherNameIndex = headers.indexOf("fathername");

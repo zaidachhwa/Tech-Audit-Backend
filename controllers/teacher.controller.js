@@ -4,6 +4,7 @@ import jwt from "jsonwebtoken";
 import { Teacher } from "../models/teacher.model.js";
 import { BatchLecture } from "../models/batchLecture.model.js";
 import { Syllabus } from "../models/syllabus.model.js";
+import { JWT_SECRET } from "../config/env.js";
 
 
 /* =====================================
@@ -11,10 +12,14 @@ import { Syllabus } from "../models/syllabus.model.js";
 ===================================== */
 export const registerTeacher = async (req, res) => {
   try {
-    const { name, email, password, subjects, phone } = req.body;
+    let { name, email, password, subjects, phone } = req.body;
 
     if (!name || !email || !password)
       return res.status(400).json({ message: "All fields required" });
+
+    email = String(email).trim().toLowerCase();
+    password = String(password).trim();
+    name = String(name).trim();
 
     const exists = await Teacher.findOne({ email });
     if (exists)
@@ -26,7 +31,7 @@ export const registerTeacher = async (req, res) => {
       name,
       email,
       password: hashed,
-      phone: phone || "", // ⭐ ADDED
+      phone: phone ? String(phone).trim() : "", // ⭐ ADDED
       subjects: subjects || [],
       isActive: false,
     });
@@ -51,7 +56,13 @@ export const registerTeacher = async (req, res) => {
 ===================================== */
 export const loginTeacher = async (req, res) => {
   try {
-    const { email, password } = req.body;
+    let { email, password } = req.body;
+
+    if (!email || !password)
+      return res.status(400).json({ message: "Email & password required" });
+
+    email = String(email).trim().toLowerCase();
+    password = String(password).trim();
 
     const teacher = await Teacher.findOne({ email });
     if (!teacher)
@@ -67,7 +78,7 @@ export const loginTeacher = async (req, res) => {
 
     const token = jwt.sign(
       { id: teacher._id, role: "teacher" },
-      process.env.JWT_SECRET,
+      JWT_SECRET,
       { expiresIn: "7d" }
     );
 

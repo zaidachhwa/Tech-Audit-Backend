@@ -11,8 +11,7 @@ import { StudentAttendance } from "../models/studentAttendance.model.js";
 import { ActivityLog } from "../models/activityLog.model.js";
 import { sendStudentCredentials, sendParentWelcomeEmail, generateRandomPassword } from "../utils/email.js";
 import { getTeacherBatchIds } from "../utils/teacherScope.js";
-
-const JWT_SECRET = process.env.JWT_SECRET;
+import { JWT_SECRET } from "../config/env.js";
 
 /* Register student */
 export const registerStudent = async (req, res) => {
@@ -66,7 +65,8 @@ export const registerStudent = async (req, res) => {
       }
     }
 
-    let finalPassword = password;
+    if (email) email = email.trim().toLowerCase();
+    if (password) password = String(password).trim();
     let shouldSendEmail = false;
 
     if (!finalPassword || isAdminAction) {
@@ -153,7 +153,8 @@ export const loginStudent = async (req, res) => {
     if (!email || !password)
       return res.status(400).json({ message: "Email & password required" });
 
-    email = email.toLowerCase();
+    email = String(email).trim().toLowerCase();
+    password = String(password).trim();
 
     const student = await Student.findOne({ email });
     if (!student)
@@ -484,7 +485,7 @@ export const updateStudent = async (req, res) => {
     console.log("updateStudent called for ID:", id);
     console.log("req.body email:", email);
 
-    if (email) email = email.toLowerCase();
+    if (email) email = String(email).trim().toLowerCase();
 
     const student = await Student.findById(id);
     if (!student)
@@ -503,9 +504,11 @@ export const updateStudent = async (req, res) => {
     const oldBatchName = student.batch_name;
     const oldBatchNo = student.batch_no;
 
-    if (name) student.name = name;
+    if (name) student.name = name.trim();
     if (email) student.email = email;
-    if (password) student.password = await bcrypt.hash(password, 10);
+    if (password && typeof password === "string" && password.trim().length > 0) {
+      student.password = await bcrypt.hash(password.trim(), 10);
+    }
     if (batch_name) student.batch_name = batch_name;
     if (batch_no !== undefined) student.batch_no = batch_no;
     if (phoneNo !== undefined) student.phoneNo = phoneNo;
@@ -604,7 +607,7 @@ export const updateMe = async (req, res) => {
 
     let { name, email, currentPassword, newPassword } = req.body;
 
-    if (email) email = email.toLowerCase();
+    if (email) email = String(email).trim().toLowerCase();
 
     const student = await Student.findById(userId);
     if (!student)

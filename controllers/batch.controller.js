@@ -1,6 +1,7 @@
 import * as batchService from "../services/batch.service.js";
 import jwt from "jsonwebtoken";
 import { getTeacherBatchIds } from "../utils/teacherScope.js";
+import { JWT_SECRET } from "../config/env.js";
 
 // ─── Helper: Get Batch IDs allocated to a specific Teacher ───────────────────
 export const getTeacherAllocatedBatchIds = async (teacherId) => {
@@ -16,7 +17,7 @@ export const getPublicBatches = async (req, res) => {
     if (authHeader && authHeader.startsWith("Bearer ")) {
       try {
         const token = authHeader.split(" ")[1];
-        const decoded = jwt.verify(token, process.env.JWT_SECRET);
+        const decoded = jwt.verify(token, JWT_SECRET);
         if (decoded && decoded.role === "teacher") {
           teacherId = decoded.id;
         }
