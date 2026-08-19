@@ -4,6 +4,7 @@ import { Admin } from "../models/admin.model.js";
 import { Teacher } from "../models/teacher.model.js";
 import { Student } from "../models/student.model.js";
 import { JWT_SECRET } from "../config/env.js";
+import { sendEmail } from "../utils/email.js";
 
 export const login = async (req, res) => {
   try {
@@ -197,8 +198,31 @@ export const forgotPassword = async (req, res) => {
       return res.status(404).json({ message: "User not found with this email" });
     }
 
-    // In a real system, we generate a code/token and email it. For now, simulate:
-    return res.status(200).json({ message: "Password reset link sent successfully", resetToken: "reset_token_simulated" });
+    // Generate a 6-digit OTP
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    user.resetPasswordOtp = otp;
+    user.resetPasswordExpires = new Date(Date.now() + 15 * 60 * 1000); // 15 mins expiry
+    await user.save();
+
+    // Send email
+    await sendEmail({
+      to: email,
+      subject: "Password Reset OTP - Tech Audit Portal",
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: auto; padding: 20px; border: 1px solid #e2e8f0; border-radius: 8px;">
+          <h2 style="color: #2563EB; margin-bottom: 20px;">Tech Audit Portal Password Reset</h2>
+          <p>Hello,</p>
+          <p>We received a request to reset your password. Use the following OTP to reset it:</p>
+          <div style="background-color: #f8fafc; padding: 15px; border-radius: 6px; margin: 20px 0; border: 1px solid #cbd5e1; font-size: 24px; font-weight: bold; letter-spacing: 5px; text-align: center;">
+            ${otp}
+          </div>
+          <p style="color: #ef4444; font-size: 13px;">This OTP will expire in 15 minutes.</p>
+          <p style="margin-top: 30px; border-top: 1px solid #e2e8f0; padding-top: 15px;">Best regards,<br>Tech Audit Administration</p>
+        </div>
+      `
+    });
+
+    return res.status(200).json({ message: "Password reset OTP sent to your email successfully" });
   } catch (err) {
     return res.status(500).json({ message: err.message });
   }
@@ -206,9 +230,9 @@ export const forgotPassword = async (req, res) => {
 
 export const resetPassword = async (req, res) => {
   try {
-    let { email, resetToken, newPassword } = req.body;
-    if (!email || !newPassword) {
-      return res.status(400).json({ message: "Email and newPassword are required" });
+    let { email, otp, newPassword } = req.body;
+    if (!email || !otp || !newPassword) {
+      return res.status(400).json({ message: "Email, OTP, and new password are required" });
     }
     email = email.toLowerCase();
 
@@ -228,7 +252,20 @@ export const resetPassword = async (req, res) => {
       return res.status(404).json({ message: "User not found" });
     }
 
+    // Validate OTP
+    if (user.resetPasswordOtp !== otp) {
+      return res.status(400).json({ message: "Invalid OTP" });
+    }
+
+    // Validate Expiry
+    if (user.resetPasswordExpires && user.resetPasswordExpires < new Date()) {
+      return res.status(400).json({ message: "OTP has expired. Please request a new one." });
+    }
+
+    // Reset password
     user.password = await bcrypt.hash(newPassword, 10);
+    user.resetPasswordOtp = ""; // Clear OTP
+    user.resetPasswordExpires = null;
     await user.save();
 
     return res.status(200).json({ message: "Password reset successfully" });

@@ -32,6 +32,8 @@ const studentSchema = new mongoose.Schema(
     isActive: { type: Boolean, default: false },
     lastLogin: { type: Date },
     customFields: { type: Map, of: mongoose.Schema.Types.Mixed, default: {} },
+    resetPasswordOtp: { type: String, default: "" },
+    resetPasswordExpires: { type: Date },
   },
   { timestamps: true }
 );

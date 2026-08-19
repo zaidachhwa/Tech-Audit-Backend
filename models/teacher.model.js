@@ -25,6 +25,8 @@ const teacherSchema = new mongoose.Schema(
 
     role: { type: String, default: "teacher" },
     isActive: { type: Boolean, default: false },
+    resetPasswordOtp: { type: String, default: "" },
+    resetPasswordExpires: { type: Date },
   },
   { timestamps: true }
 );
