@@ -329,12 +329,16 @@ export const lookupReportByStudentAndDate = async (req, res) => {
 
 export const getReportsByStudent = async (req, res) => {
   try {
-    if (req.user.role === "student" && req.user.id !== req.params.studentId) {
+    if (req.user.role === "student" && String(req.user.id) !== String(req.params.studentId)) {
       return res
         .status(403)
         .json({ message: "You can only view your own reports." });
     }
-    const reports = await Report.find({ student: req.params.studentId })
+    const filter = { student: req.params.studentId };
+    if (req.user.role === "student") {
+      filter.status = { $ne: "draft" };
+    }
+    const reports = await Report.find(filter)
       .sort({ auditDate: -1 })
       .lean();
     return res.status(200).json({ count: reports.length, reports });

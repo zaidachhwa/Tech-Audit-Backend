@@ -34,7 +34,7 @@ router.get(
   verifyToken,
   (req, res, next) => {
     // ⭐ student apne hi reports dekh sake
-    if (req.user.role === "student" && req.user.id !== req.params.studentId) {
+    if (req.user.role === "student" && String(req.user.id) !== String(req.params.studentId)) {
       return res
         .status(403)
         .json({ message: "You can only view your own reports." });
