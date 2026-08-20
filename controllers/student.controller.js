@@ -68,6 +68,7 @@ export const registerStudent = async (req, res) => {
     if (email) email = email.trim().toLowerCase();
     if (password) password = String(password).trim();
     let shouldSendEmail = false;
+    let finalPassword = password;
 
     if (!finalPassword || isAdminAction) {
       if (!finalPassword) {
