@@ -44,8 +44,8 @@ export const registerStudent = async (req, res) => {
       customFields
     } = req.body;
 
-    if (!name || !email || !batch_name || !batch_no) {
-      return res.status(400).json({ message: "Name, email, and batch name/number are required" });
+    if (!name || !email || !password || !batch_name || !batch_no) {
+      return res.status(400).json({ message: "Name, email, password, and batch name/number are required" });
     }
 
     email = email.toLowerCase();
@@ -67,21 +67,13 @@ export const registerStudent = async (req, res) => {
 
     if (email) email = email.trim().toLowerCase();
     if (password) password = String(password).trim();
-    let shouldSendEmail = false;
-    let finalPassword = password;
-
-    if (!finalPassword || isAdminAction) {
-      if (!finalPassword) {
-        finalPassword = generateRandomPassword();
-      }
-      shouldSendEmail = true;
-    }
+    let shouldSendEmail = isAdminAction;
 
     const exists = await Student.findOne({ email });
     if (exists)
       return res.status(400).json({ message: "Student already exists" });
 
-    const hashed = await bcrypt.hash(finalPassword, 10);
+    const hashed = await bcrypt.hash(password, 10);
 
     const student = await Student.create({
       name,
@@ -123,7 +115,7 @@ export const registerStudent = async (req, res) => {
 
     // Send credentials via email if applicable
     if (shouldSendEmail) {
-      await sendStudentCredentials(email, name, finalPassword);
+      await sendStudentCredentials(email, name, password);
       if (fatherEmail) {
         await sendParentWelcomeEmail(name, `${batch_name} ${batch_no}`, email, fatherEmail);
       }
