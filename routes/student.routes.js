@@ -17,7 +17,7 @@ import { verifyToken, isAdmin, isAdminOrTeacher } from "../middleware/auth.middl
 const router = Router();
 
 router.post("/register", registerStudent);
-router.post("/login", loginStudent);
+
 
 // self routes (student authenticated)
 router.get("/me", verifyToken, getMe);

@@ -14,7 +14,7 @@ import {
 
 const router = Router();
 router.post("/register", RegisterAdmin);
-router.post("/login", loginAdmin);
+
 
 //  Approve Student
 router.patch(

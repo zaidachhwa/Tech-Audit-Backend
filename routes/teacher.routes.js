@@ -21,7 +21,7 @@ import { toggleTeacherStatus } from "../controllers/teacher.controller.js";
 const router = express.Router();
 
 router.post("/register", registerTeacher);
-router.post("/login", loginTeacher);
+
 
 router.get("/list", verifyToken, isAdmin, getAllTeachers);
 router.patch("/approve/:teacherId", verifyToken, isAdmin, approveTeacher);
