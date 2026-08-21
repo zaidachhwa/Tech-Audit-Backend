@@ -61,8 +61,7 @@ export const registerStudent = async (req, res) => {
           isAdminAction = true;
         }
       } catch (err) {
-              return res.status(400).json({ message: "error" });
-
+        return res.status(400).json({ message: "error" });
       }
     }
 
@@ -399,7 +398,7 @@ export const getAllStudents = async (req, res) => {
           batch_name: { $regex: new RegExp(`^${b.batch_name.trim()}$`, "i") },
           batch_no: { $regex: new RegExp(`^${b.batch_no.toString().trim()}$`, "i") }
         }));
-        
+
         if (q.$or) {
           q = { $and: [q, { $or: batchConditions }] };
         } else {
@@ -515,7 +514,7 @@ export const updateStudent = async (req, res) => {
     if (motherPhone !== undefined) student.motherPhone = motherPhone;
     if (motherEmail !== undefined) student.motherEmail = motherEmail;
     if (isActive !== undefined) student.isActive = isActive;
-    
+
     // Additional Academic / Personal fields
     if (enrollmentNo !== undefined) student.enrollmentNo = enrollmentNo;
     if (rollNo !== undefined) student.rollNo = rollNo;
