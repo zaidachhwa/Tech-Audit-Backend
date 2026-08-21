@@ -61,7 +61,8 @@ export const registerStudent = async (req, res) => {
           isAdminAction = true;
         }
       } catch (err) {
-        // Ignore token verify error for public action
+              return res.status(400).json({ message: "error" });
+
       }
     }
 
