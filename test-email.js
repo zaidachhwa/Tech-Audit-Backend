@@ -10,9 +10,9 @@ async function test() {
   try {
     console.log('Sending test email...');
     const result = await sendEmail({
-      to: 'dev03.nexcore@gmail.com',
+      to: 'dev03nexcore@gmail.com',
       subject: 'Domain Verification Instructions',
-      html: '<p>To send to dev03.nexcore@gmail.com: You must verify your domain at <a href="https://resend.com/domains">resend.com/domains</a> by adding the provided DNS records to your domain provider. Once verified, it will work instantly.</p>'
+      html: '<p>To send to dev03nexcore@gmail.com: You must verify your domain at <a href="https://resend.com/domains">resend.com/domains</a> by adding the provided DNS records to your domain provider. Once verified, it will work instantly.</p>'
     });
     console.log('Result:', result);
   } catch (error) {

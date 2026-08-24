@@ -33,6 +33,7 @@ import punchRoutes from "./routes/punch.routes.js";
 import studentAttendanceRoutes from "./routes/studentAttendance.routes.js";
 import pushRoutes from "./routes/push.routes.js";
 import performanceReportRoutes from "./routes/performanceReport.routes.js";
+import examRoutes from "./routes/exam.routes.js";
 import { errorHandler } from "./middleware/error.middleware.js";
 import {
   MONGODB_URL,
@@ -150,6 +151,7 @@ app.use("/api/grades", gradeRoutes);
 app.use("/api/grade", gradeRoutes); // compatibility
 app.use("/api/push", pushRoutes);
 app.use("/api/performance-reports", performanceReportRoutes);
+app.use("/api/exams", examRoutes);
 
 // ERROR HANDLER
 app.use(errorHandler);

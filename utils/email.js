@@ -12,6 +12,12 @@ export const generateRandomPassword = () => {
   return pwd + "@";
 };
 
+const getFromEmail = () => {
+  let from = process.env.EMAIL_FROM || 'Tech Audit Portal <no-reply@tech-audit.com>';
+  // Strip any accidental quotes from .env parsing which break Resend's format validation
+  return from.replace(/^["']|["']$/g, '');
+};
+
 /**
  * Sends login credentials to the student.
  * If Resend API key is not configured in environment, it simulates the success.
@@ -22,7 +28,7 @@ export const sendStudentCredentials = async (email, name, password) => {
   }
 
   const resend = new Resend(process.env.RESEND_API_KEY);
-  const from = process.env.EMAIL_FROM || 'Tech Audit Portal <no-reply@tech-audit.com>';
+  const from = getFromEmail();
   const frontendUrl = process.env.FRONTEND_URL || 'https://tech.nexcoreinstitute.org';
 
   try {
@@ -70,7 +76,7 @@ export const sendEmail = async ({ to, subject, html }) => {
   }
 
   const resend = new Resend(process.env.RESEND_API_KEY);
-  const from = process.env.EMAIL_FROM || 'Tech Audit Portal <no-reply@tech-audit.com>';
+  const from = getFromEmail();
 
   try {
     const { data, error } = await resend.emails.send({
@@ -118,7 +124,7 @@ export const sendParentWelcomeEmail = async (studentNameOrOptions, batch, studen
   }
 
   const resend = new Resend(process.env.RESEND_API_KEY);
-  const from = process.env.EMAIL_FROM || 'Tech Audit Portal <no-reply@tech-audit.com>';
+  const from = getFromEmail();
   const frontendUrl = process.env.FRONTEND_URL || 'https://tech.nexcoreinstitute.org';
 
   // Normalize parent emails into array

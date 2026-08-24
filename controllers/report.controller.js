@@ -47,7 +47,7 @@ export const generateFeedback = async (req, res) => {
 
     const text = response.data.candidates[0].content.parts[0].text;
     const parsed = JSON.parse(text);
-    
+
     let points = Array.isArray(parsed.points) ? parsed.points : [];
     while (points.length < 3) points.push("");
     points = points.slice(0, 3);
@@ -135,14 +135,14 @@ export const createReport = async (req, res) => {
       overallRemarks,
       auditDate,
     });
-    
+
     if (report && report.student) {
       await sendPushToUser(report.student, "Student", {
         title: "Report Generated",
         body: "Your new performance report has been generated.",
         url: "/student/reports"
       });
-      
+
       await notifyParents([report.student], "New Performance Report", "A new performance report has been generated. Please review it on the portal.");
     }
 
@@ -304,11 +304,11 @@ export const lookupReportByStudentAndDate = async (req, res) => {
     }
 
     // Try to find an existing report (prioritize draft if both exist)
-    const report = await Report.findOne({ 
-      student: studentId, 
-      auditDate: new Date(auditDate) 
+    const report = await Report.findOne({
+      student: studentId,
+      auditDate: new Date(auditDate)
     }).sort({ status: 1 }); // "draft" usually comes before "published" alphabetically, but we should be careful. 
-    
+
     // Better sorting: drafts usually updated more recently
     // const report = await Report.findOne({ student: studentId, auditDate: new Date(auditDate) }).sort({ updatedAt: -1 });
 
@@ -574,7 +574,7 @@ export const generateReportPdf = async (req, res) => {
         grandTotal1 += Number(p.totalScore) || 10;
       }
     });
-    
+
     const grandPercentage1 = grandTotal1 > 0 ? (grandObtained1 / grandTotal1) * 100 : 0;
     const getGrade1 = (percentage) => {
       if (percentage >= 90) return "A+";
@@ -949,7 +949,7 @@ export const generateReportPreviewPdf = async (req, res) => {
         grandTotal2 += Number(p.totalScore) || 10;
       }
     });
-    
+
     const grandPercentage2 = grandTotal2 > 0 ? (grandObtained2 / grandTotal2) * 100 : 0;
     const getGrade2 = (percentage) => {
       if (percentage >= 90) return "A+";
