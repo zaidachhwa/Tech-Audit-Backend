@@ -2,7 +2,7 @@ import Exam from "../models/exam.model.js";
 
 export const createExam = async (req, res) => {
   try {
-    const { subject, date, examType, batch } = req.body;
+    const { subject, date, examType, batch, questionPaper } = req.body;
     
     if (!subject || !date || !examType || !batch) {
       return res.status(400).json({ message: "All fields are required" });
@@ -13,6 +13,7 @@ export const createExam = async (req, res) => {
       date,
       examType,
       batch,
+      questionPaper,
       createdBy: req.user.id || req.user._id,
       createdByRole: req.user.role
     });
