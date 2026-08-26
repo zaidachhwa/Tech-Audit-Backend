@@ -189,14 +189,27 @@ export const initCronJobs = () => {
     }
   });
 
-  // Check for Absent Students (run daily at 5:00 PM)
-  cron.schedule("0 17 * * *", async () => {
+  // Check for Absent Students (run daily at 5:00 PM, Monday to Friday only - Saturday & Sunday are off)
+  cron.schedule("0 17 * * 1-5", async () => {
     try {
       const today = new Date();
+      // Check day of week in Asia/Kolkata timezone (0 = Sunday, 6 = Saturday)
+      const istDate = new Date(today.toLocaleString("en-US", { timeZone: "Asia/Kolkata" }));
+      const dayOfWeek = istDate.getDay();
+
+      // Skip execution on Saturday (6) and Sunday (0)
+      if (dayOfWeek === 0 || dayOfWeek === 6) {
+        console.log(`[Absent Check] Skipping absent emails today (${istDate.toDateString()}) because Saturday & Sunday are weekly offs.`);
+        return;
+      }
+
       const istStr = today.toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata", year: "numeric", month: "2-digit", day: "2-digit" });
       const dateKey = new Date(`${istStr}T00:00:00.000Z`);
       
-      const allStudents = await Student.find({ role: "student" });
+      const allStudents = await Student.find({
+        $or: [{ role: "student" }, { role: { $exists: false } }],
+        isActive: { $ne: false },
+      });
       if (!allStudents || allStudents.length === 0) return;
       
       const presentRecords = await StudentAttendance.find({
@@ -204,17 +217,17 @@ export const initCronJobs = () => {
         punchInTime: { $ne: null }
       });
       
-      const presentStudentIds = presentRecords.map(r => r.student.toString());
+      const presentStudentIds = new Set(presentRecords.map(r => r.student.toString()));
       
       const absentStudentIds = allStudents
-        .filter(s => !presentStudentIds.includes(s._id.toString()))
+        .filter(s => !presentStudentIds.has(s._id.toString()))
         .map(s => s._id);
         
       if (absentStudentIds.length > 0) {
         await notifyParents(
           absentStudentIds,
           "Daily Attendance Alert: Absent",
-          `This is an automated alert. Your child was marked as ABSENT today (${today.toDateString()}) as they did not punch in at the institute.`
+          `This is an automated alert. Your child was marked as ABSENT today (${istDate.toDateString()}) as they did not punch in at the institute.`
         );
       }
     } catch (error) {

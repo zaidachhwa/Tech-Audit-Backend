@@ -41,14 +41,21 @@ export const registerStudent = async (req, res) => {
       profilePhoto,
       idCardPhoto,
       aadhaarPhoto,
-      customFields
+      customFields,
+      isActive
     } = req.body;
 
-    if (!name || !email || !password || !batch_name || !batch_no) {
-      return res.status(400).json({ message: "Name, email, password, and batch name/number are required" });
+    if (!name || !email || !batch_name || !batch_no) {
+      return res.status(400).json({ message: "Name, email, and batch name/number are required" });
     }
 
-    email = email.toLowerCase();
+    email = String(email).trim().toLowerCase();
+    
+    // Auto-generate password if not provided
+    let rawPassword = password ? String(password).trim() : "";
+    if (!rawPassword) {
+      rawPassword = generateRandomPassword();
+    }
 
     // Detect if this is an admin/teacher action by decoding authorization header
     let isAdminAction = false;
@@ -61,22 +68,19 @@ export const registerStudent = async (req, res) => {
           isAdminAction = true;
         }
       } catch (err) {
-        return res.status(400).json({ message: "error" });
+        // Optional token verification error ignored
       }
     }
 
-    if (email) email = email.trim().toLowerCase();
-    if (password) password = String(password).trim();
-    let shouldSendEmail = isAdminAction;
-
     const exists = await Student.findOne({ email });
-    if (exists)
+    if (exists) {
       return res.status(400).json({ message: "Student already exists" });
+    }
 
-    const hashed = await bcrypt.hash(password, 10);
+    const hashed = await bcrypt.hash(rawPassword, 10);
 
     const student = await Student.create({
-      name,
+      name: name.trim(),
       email,
       password: hashed,
       batch_name,
@@ -101,6 +105,7 @@ export const registerStudent = async (req, res) => {
       idCardPhoto: idCardPhoto || "",
       aadhaarPhoto: aadhaarPhoto || "",
       customFields: customFields || {},
+      isActive: isActive !== undefined ? isActive : (isAdminAction ? true : false),
     });
 
     // attach to batch
@@ -113,15 +118,31 @@ export const registerStudent = async (req, res) => {
       await batch.save();
     }
 
-    // Send credentials via email if applicable
-    if (shouldSendEmail) {
-      await sendStudentCredentials(email, name, password);
-      if (fatherEmail) {
-        await sendParentWelcomeEmail(name, `${batch_name} ${batch_no}`, email, fatherEmail);
+    // Send credentials via email to the student
+    try {
+      await sendStudentCredentials(email, name, rawPassword);
+    } catch (emailErr) {
+      console.error("Failed to send student credentials email:", emailErr);
+    }
+
+    // Send welcome email to parents if provided
+    try {
+      const parentEmails = new Set();
+      if (parentEmail && typeof parentEmail === "string" && parentEmail.trim()) {
+        parentEmails.add(parentEmail.trim());
       }
-      if (motherEmail) {
-        await sendParentWelcomeEmail(name, `${batch_name} ${batch_no}`, email, motherEmail);
+      if (fatherEmail && typeof fatherEmail === "string" && fatherEmail.trim()) {
+        parentEmails.add(fatherEmail.trim());
       }
+      if (motherEmail && typeof motherEmail === "string" && motherEmail.trim()) {
+        parentEmails.add(motherEmail.trim());
+      }
+
+      if (parentEmails.size > 0) {
+        await sendParentWelcomeEmail(name, `${batch_name} ${batch_no}`, email, Array.from(parentEmails));
+      }
+    } catch (parentEmailErr) {
+      console.error("Failed to send parent welcome email:", parentEmailErr);
     }
 
     const token = jwt.sign({ id: student._id, role: "student" }, JWT_SECRET, {
@@ -129,7 +150,7 @@ export const registerStudent = async (req, res) => {
     });
 
     return res.status(201).json({
-      message: "Student registered",
+      message: "Student registered successfully",
       token,
       student: { id: student._id, name, email, batch_name, batch_no },
     });
