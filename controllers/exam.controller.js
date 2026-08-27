@@ -8,6 +8,14 @@ export const createExam = async (req, res) => {
       return res.status(400).json({ message: "All fields are required" });
     }
 
+    const examDate = new Date(date);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    
+    if (examDate < today) {
+      return res.status(400).json({ message: "Exam date cannot be in the past" });
+    }
+
     const exam = new Exam({
       subject,
       date,
