@@ -83,5 +83,13 @@ const scheduleSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
+// Performance Indexes
+scheduleSchema.index({ batch: 1, createdAt: -1 });
+scheduleSchema.index({ batches: 1, createdAt: -1 });
+scheduleSchema.index({ teacher: 1, createdAt: -1 });
+scheduleSchema.index({ "lectures.date": 1 });
+scheduleSchema.index({ "lectures.teacher": 1 });
+scheduleSchema.index({ verificationStatus: 1 });
+
 export const Schedule = mongoose.model("Schedule", scheduleSchema);
 export default Schedule;

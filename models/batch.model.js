@@ -13,4 +13,8 @@ const batchSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
+batchSchema.index({ batch_name: 1, batch_no: 1 });
+batchSchema.index({ course: 1, semester: 1 });
+batchSchema.index({ students: 1 });
+
 export default mongoose.model("Batch", batchSchema);
