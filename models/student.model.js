@@ -38,6 +38,9 @@ const studentSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
+studentSchema.index({ batch_name: 1, batch_no: 1 });
+studentSchema.index({ course: 1, semester: 1 });
+studentSchema.index({ role: 1 });
 
 export const Student = mongoose.model("Student", studentSchema);
 export default Student; 

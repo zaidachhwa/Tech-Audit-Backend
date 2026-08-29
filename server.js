@@ -2,6 +2,7 @@ import "./config/env.js";
 import express from "express";
 import mongoose from "mongoose";
 import cors from "cors";
+import compression from "compression";
 import adminRoutes from "./routes/admin.routes.js";
 import studentRoutes from "./routes/student.routes.js";
 import batchRoutes from "./routes/batch.routes.js";
@@ -47,6 +48,9 @@ import { initCronJobs } from "./services/cron.service.js";
 
 
 const app = express();
+// Enable gzip / brotli compression for all JSON and static payloads
+app.use(compression());
+
 // Initialize Cron Jobs
 initCronJobs();
 import path from "path";
@@ -57,8 +61,8 @@ const __dirname = path.dirname(__filename);
 
 app.use(express.json({ limit: "20mb" }));
 app.use(express.urlencoded({ limit: "20mb", extended: true }));
-app.use("/uploads", express.static(path.join(__dirname, "uploads")));
-app.use("/api/uploads", express.static(path.join(__dirname, "uploads")));
+app.use("/uploads", express.static(path.join(__dirname, "uploads"), { maxAge: "7d" }));
+app.use("/api/uploads", express.static(path.join(__dirname, "uploads"), { maxAge: "7d" }));
 
 app.use(
   cors({
@@ -67,9 +71,14 @@ app.use(
   })
 );
 
-// CONNECT DB
+// CONNECT DB WITH CONNECTION POOLING
 mongoose
-  .connect(MONGODB_URL)
+  .connect(MONGODB_URL, {
+    maxPoolSize: 20,
+    minPoolSize: 5,
+    serverSelectionTimeoutMS: 5000,
+    socketTimeoutMS: 45000,
+  })
   .then(async () => {
     console.log("MongoDB Connected");
     try {

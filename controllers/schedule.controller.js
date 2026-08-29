@@ -9,24 +9,93 @@ import { Lecture } from "../models/lecture.model.js";
 import { sendPushToBatch, sendPushToTeachers, sendPushToUser } from "../services/pushNotification.service.js";
 import { notifyParents } from "../services/parentNotification.service.js";
 
-const validateTeacherConflicts = async (proposedLectures, currentScheduleId = null) => {
-  const parseTimeSlot = (slot) => {
-    if (!slot || typeof slot !== "string") return null;
-    const parts = slot.split("-");
-    if (parts.length !== 2) return null;
-    const toMinutes = (t) => {
-      const [h, m] = t.trim().split(":").map(Number);
-      if (isNaN(h) || isNaN(m)) return null;
-      return h * 60 + m;
-    };
-    const start = toMinutes(parts[0]);
-    const end = toMinutes(parts[1]);
-    if (start === null || end === null || end <= start) return null;
-    return { start, end };
+/**
+ * Universal time slot parser supporting both 24-hour ("10:00 - 12:00")
+ * and 12-hour AM/PM formats ("09:00 AM - 10:45 AM", "2:30 PM - 4:00 PM").
+ */
+export const parseTimeSlot = (slot) => {
+  if (!slot || typeof slot !== "string") return null;
+  const parts = slot.split("-");
+  if (parts.length !== 2) return null;
+
+  const toMinutes = (t) => {
+    if (!t) return null;
+    const str = t.trim();
+    // Match 12-hour (e.g. "9:00 AM", "02:30 PM", "9:00am") or 24-hour ("14:30", "09:00")
+    const match = str.match(/^(\d{1,2}):(\d{2})\s*([aApP][mM])?$/);
+    if (!match) return null;
+
+    let hours = parseInt(match[1], 10);
+    const minutes = parseInt(match[2], 10);
+    const modifier = match[3] ? match[3].toUpperCase() : null;
+
+    if (isNaN(hours) || isNaN(minutes) || minutes < 0 || minutes > 59) return null;
+
+    if (modifier) {
+      if (hours < 1 || hours > 12) return null;
+      if (modifier === "PM" && hours < 12) hours += 12;
+      if (modifier === "AM" && hours === 12) hours = 0;
+    } else {
+      if (hours < 0 || hours > 23) return null;
+    }
+
+    return hours * 60 + minutes;
   };
 
-  const overlaps = (a, b) => a.start < b.end && b.start < a.end;
+  const start = toMinutes(parts[0]);
+  const end = toMinutes(parts[1]);
+  if (start === null || end === null || end <= start) return null;
+  return { start, end };
+};
 
+export const overlaps = (a, b) => a.start < b.end && b.start < a.end;
+
+/**
+ * Helper to resolve all Batch ObjectIds belonging to a student (direct, mapping, or course/semester)
+ */
+export const getStudentBatchIds = async (studentId, studentDoc = null) => {
+  const student = studentDoc || await Student.findById(studentId).lean();
+  if (!student) return [];
+
+  const batchIdSet = new Set();
+
+  // 1. Direct matching on batch_name + batch_no
+  if (student.batch_name && student.batch_no) {
+    const directBatch = await Batch.findOne({
+      batch_name: student.batch_name,
+      batch_no: student.batch_no
+    }).select("_id").lean();
+    if (directBatch) batchIdSet.add(directBatch._id.toString());
+  }
+
+  // 2. Matching via StudentBatchMapping
+  try {
+    const StudentBatchMapping = (await import("../models/studentBatchMapping.model.js")).default;
+    const mappings = await StudentBatchMapping.find({ student: studentId }).select("batch").lean();
+    mappings.forEach(m => {
+      if (m.batch) batchIdSet.add(m.batch.toString());
+    });
+  } catch (e) {
+    // optional mapping fallback
+  }
+
+  // 3. Matching via Batch.students array
+  const enrolledBatches = await Batch.find({ students: studentId }).select("_id").lean();
+  enrolledBatches.forEach(b => batchIdSet.add(b._id.toString()));
+
+  // 4. Matching via course + semester if specified
+  if (student.course && student.semester) {
+    const courseBatches = await Batch.find({
+      course: student.course,
+      semester: student.semester
+    }).select("_id").lean();
+    courseBatches.forEach(b => batchIdSet.add(b._id.toString()));
+  }
+
+  return Array.from(batchIdSet);
+};
+
+const validateTeacherConflicts = async (proposedLectures, currentScheduleId = null) => {
   const query = {};
   if (currentScheduleId) {
     query._id = { $ne: currentScheduleId };
@@ -204,23 +273,23 @@ export const listSchedules = async (req, res) => {
       const student = await Student.findById(userId);
       if (!student) return res.status(404).json({ message: "Student not found" });
 
-      // Resolve student's Batch ObjectId
-      const studentBatch = await Batch.findOne({
-        batch_name: student.batch_name,
-        batch_no: student.batch_no
-      }).lean();
-
-      if (!studentBatch) {
-        return res.status(200).json([]); // No matching batch found in system yet
+      const studentBatchIds = await getStudentBatchIds(userId, student);
+      if (studentBatchIds.length === 0) {
+        return res.status(200).json([]);
       }
 
-      query.$or = query.$or || [];
-      query.$or.push({ batch: studentBatch._id }, { batches: studentBatch._id });
+      const mongoose = await import("mongoose");
+      const objIds = studentBatchIds.map(id => new mongoose.default.Types.ObjectId(id));
+
+      query.$or = [
+        { batch: { $in: objIds } },
+        { batches: { $in: objIds } }
+      ];
     }
 
     const schedules = await Schedule.find(query)
-      .populate("batch", "batch_name batch_no")
-      .populate("batches", "batch_name batch_no")
+      .populate("batch", "batch_name batch_no course semester")
+      .populate("batches", "batch_name batch_no course semester")
       .populate("teacher", "name email")
       .populate("lectures.teacher", "name email")
       .populate("lectures.originalTeacher", "name")
@@ -232,30 +301,22 @@ export const listSchedules = async (req, res) => {
       dueDate: { $exists: true, $ne: null }
     };
 
-    let studentBatchResolved = null;
     if (role === "teacher") {
       batchLecturesQuery.$or = [
         { assignedTo: userId },
         { originalTeacher: userId }
       ];
     } else if (role === "student") {
-      const student = await Student.findById(userId).lean();
-      if (student) {
-        const studentBatch = await Batch.findOne({
-          batch_name: student.batch_name,
-          batch_no: student.batch_no
-        }).lean();
-        if (studentBatch) {
-          studentBatchResolved = studentBatch;
-          batchLecturesQuery.batch = studentBatch._id;
-        } else {
-          return res.status(200).json(schedules);
-        }
+      const studentBatchIds = await getStudentBatchIds(userId);
+      if (studentBatchIds.length > 0) {
+        batchLecturesQuery.batch = { $in: studentBatchIds };
+      } else {
+        return res.status(200).json(schedules);
       }
     }
 
     const scheduledBatchLectures = await BatchLecture.find(batchLecturesQuery)
-      .populate("batch", "batch_name batch_no")
+      .populate("batch", "batch_name batch_no course semester")
       .populate("syllabus", "subject name")
       .populate("assignedTo", "name email")
       .populate("originalTeacher", "name email")
@@ -301,6 +362,7 @@ export const listSchedules = async (req, res) => {
           _id: `batch_syllabus_${key}`,
           subject: bl.syllabus.subject || bl.syllabus.name || "Syllabus Lecture",
           batch: bl.batch,
+          batches: [bl.batch],
           teacher: bl.assignedTo || { name: "Unassigned", email: "" },
           lectures: [],
           verificationStatus: "approved",
@@ -326,6 +388,15 @@ export const listSchedules = async (req, res) => {
 
     const batchSyllabusSchedules = Object.values(groups).filter(g => g.lectures.length > 0);
     const allSchedules = [...schedules, ...batchSyllabusSchedules];
+
+    // Sanitize teacher-private notes for student role
+    if (role === "student") {
+      allSchedules.forEach(sch => {
+        (sch.lectures || []).forEach(lec => {
+          lec.notes_teacher = undefined;
+        });
+      });
+    }
 
     return res.status(200).json(allSchedules);
   } catch (err) {
@@ -361,7 +432,7 @@ export const getScheduleById = async (req, res) => {
       }
 
       const bls = await BatchLecture.find(query)
-        .populate("batch", "batch_name batch_no")
+        .populate("batch", "batch_name batch_no course semester")
         .populate("syllabus", "subject name")
         .populate("assignedTo", "name email")
         .populate("originalTeacher", "name")
@@ -377,6 +448,7 @@ export const getScheduleById = async (req, res) => {
         _id: id,
         subject: firstLec.syllabus?.subject || firstLec.syllabus?.name || "Syllabus Lectures",
         batch: firstLec.batch,
+        batches: [firstLec.batch],
         teacher: firstLec.assignedTo || { name: "Unassigned", email: "" },
         lectures: bls.map(bl => ({
           _id: bl._id,
@@ -396,11 +468,22 @@ export const getScheduleById = async (req, res) => {
         isFromSyllabusTracker: true
       };
 
+      if (role === "student") {
+        const studentBatchIds = await getStudentBatchIds(userId);
+        if (!studentBatchIds.includes(batchId)) {
+          return res.status(403).json({ message: "Access denied. This schedule is for another batch." });
+        }
+        virtualSchedule.lectures.forEach(l => {
+          l.notes_teacher = undefined;
+        });
+      }
+
       return res.status(200).json(virtualSchedule);
     }
 
     const schedule = await Schedule.findById(id)
-      .populate("batch", "batch_name batch_no")
+      .populate("batch", "batch_name batch_no course semester")
+      .populate("batches", "batch_name batch_no course semester")
       .populate("teacher", "name email")
       .populate("lectures.teacher", "name email")
       .populate("lectures.originalTeacher", "name");
@@ -411,10 +494,10 @@ export const getScheduleById = async (req, res) => {
 
     // Role-based visibility validation
     if (role === "teacher") {
-      const isPrimary = schedule.teacher._id.toString() === userId;
+      const isPrimary = schedule.teacher?._id?.toString() === userId;
       const isLectureTeacher = schedule.lectures.some(l => 
-        (l.teacher && l.teacher._id.toString() === userId) ||
-        (l.originalTeacher && l.originalTeacher._id.toString() === userId)
+        (l.teacher && l.teacher._id?.toString() === userId) ||
+        (l.originalTeacher && l.originalTeacher._id?.toString() === userId)
       );
       if (!isPrimary && !isLectureTeacher) {
         return res.status(403).json({ message: "Access denied. This schedule is assigned to another teacher." });
@@ -422,19 +505,20 @@ export const getScheduleById = async (req, res) => {
     }
 
     if (role === "student") {
-      const student = await Student.findById(userId).lean();
-      if (!student) {
-        return res.status(404).json({ message: "Student account not found." });
-      }
+      const studentBatchIds = await getStudentBatchIds(userId);
+      const scheduleBatchIds = [
+        ...(schedule.batches || []).map(b => b._id ? b._id.toString() : b.toString()),
+        schedule.batch ? (schedule.batch._id ? schedule.batch._id.toString() : schedule.batch.toString()) : null
+      ].filter(Boolean);
 
-      const studentBatch = await Batch.findOne({
-        batch_name: student.batch_name,
-        batch_no: student.batch_no
-      }).lean();
-
-      if (!studentBatch || schedule.batch._id.toString() !== studentBatch._id.toString()) {
+      const hasAccess = scheduleBatchIds.some(id => studentBatchIds.includes(id));
+      if (!hasAccess) {
         return res.status(403).json({ message: "Access denied. This schedule is for another batch." });
       }
+
+      (schedule.lectures || []).forEach(lec => {
+        lec.notes_teacher = undefined;
+      });
     }
 
     return res.status(200).json(schedule);
@@ -723,6 +807,133 @@ export const deleteSchedule = async (req, res) => {
 };
 
 /**
+ * Helper to synchronize a schedule lecture homework with the standalone Homework collection
+ * so it automatically appears in /api/homework, /api/student-homework, AssignTask and StudentAssignments.
+ */
+export const syncScheduleLectureToHomework = async (schedule, lecture, userId) => {
+  if (!lecture || !lecture.homework || !lecture.homework.title || !lecture.homework.title.trim()) {
+    return;
+  }
+
+  try {
+    const Homework = (await import("../models/homework.model.js")).default;
+    const targetBatchIds = (schedule.batches && schedule.batches.length > 0)
+      ? schedule.batches.map(b => b._id || b)
+      : (schedule.batch ? [schedule.batch._id || schedule.batch] : []);
+
+    const batches = await Batch.find({ _id: { $in: targetBatchIds } }).lean();
+    let targetStudents = [];
+    let batchMap = {};
+
+    for (const b of batches) {
+      if (b.students && b.students.length > 0) {
+        for (const sid of b.students) {
+          targetStudents.push(sid);
+          batchMap[sid.toString()] = b;
+        }
+      }
+
+      const studentsInBatch = await Student.find({
+        batch_name: b.batch_name,
+        batch_no: b.batch_no
+      }).select("_id").lean();
+
+      for (const s of studentsInBatch) {
+        targetStudents.push(s._id);
+        batchMap[s._id.toString()] = b;
+      }
+
+      try {
+        const StudentBatchMapping = (await import("../models/studentBatchMapping.model.js")).default;
+        const mappings = await StudentBatchMapping.find({ batch: b._id }).select("student").lean();
+        for (const m of mappings) {
+          if (m.student) {
+            targetStudents.push(m.student);
+            batchMap[m.student.toString()] = b;
+          }
+        }
+      } catch (e) {}
+    }
+
+    const uniqueStudentIds = [...new Set(targetStudents.map(id => id.toString()))];
+
+    for (const sId of uniqueStudentIds) {
+      const bDoc = batchMap[sId];
+
+      const existingSubmissions = await Submission.find({
+        schedule: schedule._id,
+        lectureId: lecture._id,
+        student: sId
+      }).lean();
+
+      const formattedSubmissions = existingSubmissions.map(sub => ({
+        submissionText: sub.submissionText || "",
+        fileName: sub.fileName || "attachment",
+        fileUrl: sub.fileUrl || "",
+        attachments: sub.fileUrl ? [sub.fileUrl] : [],
+        submittedAt: sub.createdAt || new Date(),
+        status: sub.status === "reviewed" ? "approved" : "pending_review",
+        marks: sub.marks,
+        remarks: sub.remarks || ""
+      }));
+
+      const existingHw = await Homework.findOne({ lecture: lecture._id, student: sId });
+
+      if (existingHw) {
+        existingHw.title = lecture.homework.title;
+        existingHw.description = lecture.homework.description || "";
+        existingHw.comment = lecture.homework.description || "";
+        existingHw.dueDate = lecture.homework.due_date || lecture.date || new Date();
+        existingHw.course = bDoc?.course || existingHw.course || "";
+        existingHw.semester = bDoc?.semester || existingHw.semester || "";
+        existingHw.subjectName = schedule.subject || existingHw.subjectName || "";
+        existingHw.batch = bDoc?._id || existingHw.batch;
+        existingHw.batchIds = targetBatchIds;
+        existingHw.batchName = bDoc?.batch_name || existingHw.batchName;
+        existingHw.batchNumber = bDoc?.batch_no || existingHw.batchNumber;
+        if (formattedSubmissions.length > 0 && (!existingHw.submissions || existingHw.submissions.length === 0)) {
+          existingHw.submissions = formattedSubmissions;
+          existingHw.status = "pending_review";
+        }
+        await existingHw.save();
+      } else {
+        await Homework.create({
+          title: lecture.homework.title,
+          description: lecture.homework.description || "",
+          comment: lecture.homework.description || "",
+          course: bDoc?.course || "",
+          semester: bDoc?.semester || "",
+          subject: null,
+          subjectName: schedule.subject || "",
+          dueDate: lecture.homework.due_date || lecture.date || new Date(),
+          lecture: lecture._id,
+          student: sId,
+          batch: bDoc?._id || null,
+          batchIds: targetBatchIds,
+          batchName: bDoc?.batch_name || "",
+          batchNumber: bDoc?.batch_no || "",
+          assignedBy: schedule.teacher?._id || schedule.teacher || userId,
+          status: formattedSubmissions.length > 0 ? "pending_review" : "assigned",
+          submissions: formattedSubmissions
+        });
+      }
+    }
+
+    // Push notification to batch
+    const uniqueBatchNames = [...new Set(Object.values(batchMap).map(b => b?.batch_name).filter(Boolean))];
+    for (const bName of uniqueBatchNames) {
+      await sendPushToBatch(bName, {
+        title: "New Lecture Homework Assigned",
+        body: `${schedule.subject}: ${lecture.homework.title}`,
+        url: "/student/assignments"
+      });
+    }
+  } catch (syncErr) {
+    console.error("Error in syncScheduleLectureToHomework:", syncErr);
+  }
+};
+
+/**
  * Save Homework details on a specific lecture row
  * Role: Admin, Teacher
  */
@@ -758,6 +969,11 @@ export const saveHomework = async (req, res) => {
     };
 
     await schedule.save();
+
+    // Auto sync to Homework collection so it appears in AssignTask & StudentAssignments
+    if (title && title.trim()) {
+      await syncScheduleLectureToHomework(schedule, lecture, userId);
+    }
 
     return res.status(200).json({
       message: "Homework assigned successfully",
@@ -829,7 +1045,7 @@ export const saveNotes = async (req, res) => {
     if (files.notes_shared && files.notes_shared.length > 0) {
       lecture.notes_shared = files.notes_shared.map(file => ({
         fileName: file.originalname,
-        fileUrl: `${req.protocol}://${req.get("host")}/uploads/${file.filename}`
+        fileUrl: `/uploads/${file.filename}`
       }));
     }
 
@@ -837,7 +1053,7 @@ export const saveNotes = async (req, res) => {
     if (files.notes_teacher && files.notes_teacher.length > 0) {
       lecture.notes_teacher = files.notes_teacher.map(file => ({
         fileName: file.originalname,
-        fileUrl: `${req.protocol}://${req.get("host")}/uploads/${file.filename}`
+        fileUrl: `/uploads/${file.filename}`
       }));
     }
 
@@ -900,14 +1116,14 @@ export const getLectureSubmissions = async (req, res) => {
 export const submitHomework = async (req, res) => {
   try {
     const { scheduleId, lectureId } = req.params;
-    const { fileName, fileUrl } = req.body;
+    const { fileName, fileUrl, submissionText } = req.body;
     const { id: userId, role } = req.user;
 
     if (role !== "student") {
       return res.status(403).json({ message: "Only students can submit homework." });
     }
 
-    if (!fileName || !fileUrl) {
+    if (!fileName && !fileUrl && !submissionText) {
       return res.status(400).json({ message: "File name and file content are required." });
     }
 
@@ -950,6 +1166,48 @@ export const submitHomework = async (req, res) => {
         fileName,
         fileUrl
       });
+    }
+
+    // Sync to Homework collection
+    try {
+      const Homework = (await import("../models/homework.model.js")).default;
+      let homework = await Homework.findOne({ lecture: lectureId, student: userId });
+      const studentDoc = await Student.findById(userId).lean();
+
+      if (!homework) {
+        homework = await Homework.create({
+          title: lecture.homework.title,
+          description: lecture.homework.description || "",
+          comment: lecture.homework.description || "",
+          course: studentDoc?.course || "",
+          semester: studentDoc?.semester || "",
+          subject: null,
+          subjectName: schedule.subject || "",
+          dueDate: lecture.homework.due_date || lecture.date || new Date(),
+          lecture: lectureId,
+          student: userId,
+          batch: schedule.batch || null,
+          batchIds: schedule.batches && schedule.batches.length > 0 ? schedule.batches : (schedule.batch ? [schedule.batch] : []),
+          batchName: studentDoc?.batch_name || "",
+          batchNumber: studentDoc?.batch_no || "",
+          assignedBy: schedule.teacher || null,
+          status: "pending_review"
+        });
+      }
+
+      const fileAtt = fileUrl ? [fileUrl] : [];
+      homework.submissions.push({
+        submissionText: submissionText || "",
+        fileName: fileName || "attachment",
+        fileUrl: fileUrl || "",
+        attachments: fileAtt,
+        submittedAt: new Date(),
+        status: "pending_review"
+      });
+      homework.status = "pending_review";
+      await homework.save();
+    } catch (hwSyncErr) {
+      console.error("Error syncing submission to Homework collection:", hwSyncErr);
     }
 
     const populated = await Submission.findById(submission._id).populate("student", "name email");
@@ -1176,25 +1434,6 @@ export const checkConflicts = async (req, res) => {
     if (!lectures || !Array.isArray(lectures) || lectures.length === 0) {
       return res.status(400).json({ message: "lectures array is required." });
     }
-
-    // Helper: parse a time_slot like "10:00-12:00" into minutes since midnight
-    const parseTimeSlot = (slot) => {
-      if (!slot || typeof slot !== "string") return null;
-      const parts = slot.split("-");
-      if (parts.length !== 2) return null;
-      const toMinutes = (t) => {
-        const [h, m] = t.trim().split(":").map(Number);
-        if (isNaN(h) || isNaN(m)) return null;
-        return h * 60 + m;
-      };
-      const start = toMinutes(parts[0]);
-      const end = toMinutes(parts[1]);
-      if (start === null || end === null || end <= start) return null;
-      return { start, end };
-    };
-
-    // Helper: check if two time ranges overlap
-    const overlaps = (a, b) => a.start < b.end && b.start < a.end;
 
     const conflicts = [];
 
@@ -1473,23 +1712,6 @@ export const checkVenueAvailability = async (req, res) => {
       return res.status(400).json({ message: "Date and time_slot are required." });
     }
 
-    const parseTimeSlot = (slot) => {
-      if (!slot || typeof slot !== "string") return null;
-      const parts = slot.split("-");
-      if (parts.length !== 2) return null;
-      const toMinutes = (t) => {
-        const [h, m] = t.trim().split(":").map(Number);
-        if (isNaN(h) || isNaN(m)) return null;
-        return h * 60 + m;
-      };
-      const start = toMinutes(parts[0]);
-      const end = toMinutes(parts[1]);
-      if (start === null || end === null || end <= start) return null;
-      return { start, end };
-    };
-
-    const overlaps = (a, b) => a.start < b.end && b.start < a.end;
-
     const proposedTime = parseTimeSlot(time_slot);
     if (!proposedTime) {
       return res.status(400).json({ message: "Invalid time_slot format." });
@@ -1595,23 +1817,6 @@ export const updateLectureVenue = async (req, res) => {
     if (lecture.venue === newVenue) {
       return res.status(400).json({ message: "Lecture is already assigned to this venue." });
     }
-
-    const parseTimeSlot = (slot) => {
-      if (!slot || typeof slot !== "string") return null;
-      const parts = slot.split("-");
-      if (parts.length !== 2) return null;
-      const toMinutes = (t) => {
-        const [h, m] = t.trim().split(":").map(Number);
-        if (isNaN(h) || isNaN(m)) return null;
-        return h * 60 + m;
-      };
-      const start = toMinutes(parts[0]);
-      const end = toMinutes(parts[1]);
-      if (start === null || end === null || end <= start) return null;
-      return { start, end };
-    };
-
-    const overlaps = (a, b) => a.start < b.end && b.start < a.end;
 
     const proposedTime = parseTimeSlot(lecture.time_slot);
     if (proposedTime && lecture.date) {
