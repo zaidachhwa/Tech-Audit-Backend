@@ -149,17 +149,34 @@ export const getStudentResults = async (req, res) => {
     const student = await Student.findById(studentId);
 
     const existingResults = await ExamResult.find({ student: studentId })
-      .populate({ path: "exam", select: "subject date examType questionPaper", model: Exam })
+      .populate({ path: "exam", select: "subject date examType questionPaper startTime endTime durationMinutes totalMarks passingMarks instructions", model: Exam })
       .sort({ createdAt: -1 });
 
+    const sanitizedResults = existingResults.map((r) => {
+      const rObj = r.toObject ? r.toObject() : { ...r };
+      if (rObj.marksObtained !== null && rObj.marksObtained !== undefined && rObj.totalMarks > 0) {
+        const pct = Math.round((rObj.marksObtained / rObj.totalMarks) * 100);
+        let passThresholdPct = 40;
+        if (rObj.exam && rObj.exam.passingMarks > 0) {
+          if (rObj.exam.passingMarks <= rObj.totalMarks) {
+            passThresholdPct = (rObj.exam.passingMarks / rObj.totalMarks) * 100;
+          } else {
+            passThresholdPct = rObj.exam.passingMarks;
+          }
+        }
+        rObj.status = pct >= passThresholdPct ? "Pass" : "Fail";
+      }
+      return rObj;
+    });
+
     const resultMap = new Map();
-    existingResults.forEach((r) => {
+    sanitizedResults.forEach((r) => {
       if (r.exam && r.exam._id) {
         resultMap.set(r.exam._id.toString(), r);
       }
     });
 
-    let combined = [...existingResults];
+    let combined = [...sanitizedResults];
 
     if (student) {
       let batchIds = [];
@@ -198,7 +215,13 @@ export const getStudentResults = async (req, res) => {
                 subject: exam.subject,
                 date: exam.date,
                 examType: exam.examType,
-                questionPaper: exam.questionPaper
+                questionPaper: exam.questionPaper,
+                startTime: exam.startTime,
+                endTime: exam.endTime,
+                durationMinutes: exam.durationMinutes,
+                totalMarks: exam.totalMarks,
+                passingMarks: exam.passingMarks,
+                instructions: exam.instructions
               },
               student: studentId,
               marksObtained: null,

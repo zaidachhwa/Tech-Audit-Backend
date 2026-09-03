@@ -36,6 +36,7 @@ import pushRoutes from "./routes/push.routes.js";
 import performanceReportRoutes from "./routes/performanceReport.routes.js";
 import examRoutes from "./routes/exam.routes.js";
 import examResultRoutes from "./routes/examResult.routes.js";
+import onlineExamRoutes from "./routes/onlineExam.routes.js";
 import { errorHandler } from "./middleware/error.middleware.js";
 import {
   MONGODB_URL,
@@ -163,6 +164,7 @@ app.use("/api/push", pushRoutes);
 app.use("/api/performance-reports", performanceReportRoutes);
 app.use("/api/exams", examRoutes);
 app.use("/api/exam-results", examResultRoutes);
+app.use("/api/online-exams", onlineExamRoutes);
 
 // ERROR HANDLER
 app.use(errorHandler);
