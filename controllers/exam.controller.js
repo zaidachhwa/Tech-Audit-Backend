@@ -161,3 +161,93 @@ export const deleteExam = async (req, res) => {
     res.status(500).json({ message: err.message });
   }
 };
+
+export const generateAIQuestions = async (req, res) => {
+  try {
+    const { topic, numQuestions = 5, difficulty = "Medium", questionType = "mcq", marksPerQuestion = 1 } = req.body;
+
+    if (!topic || !topic.trim()) {
+      return res.status(400).json({ message: "Topic / Subject description is required for AI question generation." });
+    }
+
+    const apiKey = process.env.GEMINI_API_KEY;
+    if (!apiKey) {
+      return res.status(500).json({ message: "GEMINI_API_KEY is not configured in backend environment." });
+    }
+
+    const count = Math.min(Math.max(Number(numQuestions) || 5, 1), 25);
+    const marks = Number(marksPerQuestion) || 1;
+
+    let typePrompt = "";
+    if (questionType === "mcq") {
+      typePrompt = "All questions must be Multiple Choice Questions (mcq) with exactly 4 options (Option A, B, C, D) and a single correct option letter ('A', 'B', 'C', or 'D').";
+    } else if (questionType === "true_false") {
+      typePrompt = "All questions must be True/False (true_false) with options ['True', 'False'] and correctAnswer as 'True' or 'False'.";
+    } else if (questionType === "short_answer") {
+      typePrompt = "All questions must be Short Answer (short_answer) with empty options array [] and a concise expected answer string as correctAnswer.";
+    } else {
+      typePrompt = "A balanced mix of MCQ (Multiple Choice with 4 options), True/False, and Short Answer questions.";
+    }
+
+    const prompt = `You are an expert technical examiner and syllabus question builder.
+Generate exactly ${count} high-quality, professional exam questions for the topic/syllabus: "${topic.trim()}".
+Difficulty level: ${difficulty}.
+Marks per question: ${marks}.
+Question formatting instruction: ${typePrompt}
+
+CRITICAL REQUIREMENT:
+Respond ONLY with a valid JSON array of question objects matching this exact schema:
+[
+  {
+    "questionText": "Question string here",
+    "questionType": "mcq" | "true_false" | "short_answer",
+    "options": ["Option A text", "Option B text", "Option C text", "Option D text"],
+    "correctAnswer": "A" | "B" | "C" | "D" | "True" | "False" | "Expected answer string",
+    "marks": ${marks}
+  }
+]
+Do not include any intro, markdown text, wrappers outside json, or extra commentary. Output strictly valid raw JSON array.`;
+
+    const axios = (await import("axios")).default;
+    const response = await axios.post(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite:generateContent?key=${apiKey}`,
+      {
+        contents: [{ parts: [{ text: prompt }] }],
+        generationConfig: {
+          responseMimeType: "application/json"
+        }
+      },
+      { headers: { "Content-Type": "application/json" } }
+    );
+
+    const text = response.data?.candidates?.[0]?.content?.parts?.[0]?.text;
+    if (!text) {
+      return res.status(500).json({ message: "No response text received from Gemini API." });
+    }
+
+    let parsedQuestions = JSON.parse(text);
+    if (!Array.isArray(parsedQuestions)) {
+      if (parsedQuestions.questions && Array.isArray(parsedQuestions.questions)) {
+        parsedQuestions = parsedQuestions.questions;
+      } else {
+        return res.status(500).json({ message: "Invalid question paper structure returned by AI." });
+      }
+    }
+
+    const sanitized = parsedQuestions.map((q) => ({
+      questionText: String(q.questionText || "Untitled Question").trim(),
+      questionType: ["mcq", "true_false", "short_answer"].includes(q.questionType) ? q.questionType : "mcq",
+      options: Array.isArray(q.options) ? q.options.map((o) => String(o).trim()) : [],
+      correctAnswer: String(q.correctAnswer || "A").trim(),
+      marks: Number(q.marks) || marks
+    }));
+
+    res.status(200).json({
+      message: `Successfully generated ${sanitized.length} questions using Gemini AI!`,
+      questions: sanitized
+    });
+  } catch (err) {
+    console.error("AI Question Generation Error:", err.response?.data || err.message);
+    res.status(500).json({ message: err.response?.data?.error?.message || err.message || "Failed to generate AI question paper" });
+  }
+};
