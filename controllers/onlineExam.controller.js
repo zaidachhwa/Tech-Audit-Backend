@@ -24,56 +24,61 @@ const finalizeAttempt = async (attempt, exam, isAuto = false) => {
   let totalPossibleMarks = 0;
   const questionsMap = new Map();
   (exam.questions || []).forEach((q) => {
-    questionsMap.set(q._id.toString(), q);
-    totalPossibleMarks += q.marks || 1;
-  });
-
-  const updatedAnswers = (attempt.answers || []).map((userAns) => {
-    const question = questionsMap.get(userAns.questionId.toString());
-    let isCorrect = false;
-    let marksAwarded = 0;
-
-    if (question && question.correctAnswer) {
-      const uAns = (userAns.answer || "").trim().toLowerCase();
-      const cAns = (question.correctAnswer || "").trim().toLowerCase();
-
-      // Direct match or Option Letter Match (e.g. user answered "C" or "Option C" or exact option text)
-      if (uAns === cAns) {
-        isCorrect = true;
-      } else if (question.options && question.options.length > 0) {
-        // Check if correct answer is option letter e.g., 'A', 'B', 'C', 'D'
-        const letterIndex = ["a", "b", "c", "d"].indexOf(cAns);
-        if (letterIndex >= 0 && question.options[letterIndex]) {
-          const optionText = question.options[letterIndex].trim().toLowerCase();
-          if (uAns === optionText || uAns === `option ${cAns}`) {
-            isCorrect = true;
-          }
-        }
-        // Vice versa: if user selected "C" and correct answer is option[2]
-        const userLetterIndex = ["a", "b", "c", "d"].indexOf(uAns);
-        if (userLetterIndex >= 0 && question.options[userLetterIndex]) {
-          const optionText = question.options[userLetterIndex].trim().toLowerCase();
-          if (optionText === cAns) {
-            isCorrect = true;
-          }
-        }
-      }
-
-      if (isCorrect) {
-        marksAwarded = question.marks || 1;
-        totalScore += marksAwarded;
-      }
+    if (q && q._id) {
+      questionsMap.set(q._id.toString(), q);
+      totalPossibleMarks += Number(q.marks) || 1;
     }
-
-    return {
-      questionId: userAns.questionId,
-      answer: userAns.answer,
-      isCorrect,
-      marksAwarded
-    };
   });
 
-  const totalExamMarks = exam.totalMarks || totalPossibleMarks || 100;
+  const updatedAnswers = (attempt.answers || [])
+    .filter((userAns) => userAns && userAns.questionId && mongoose.Types.ObjectId.isValid(userAns.questionId))
+    .map((userAns) => {
+      const qIdStr = userAns.questionId.toString();
+      const question = questionsMap.get(qIdStr);
+      let isCorrect = false;
+      let marksAwarded = 0;
+
+      if (question && question.correctAnswer) {
+        const uAns = (userAns.answer || "").trim().toLowerCase();
+        const cAns = (question.correctAnswer || "").trim().toLowerCase();
+
+        // Direct match or Option Letter Match (e.g. user answered "C" or "Option C" or exact option text)
+        if (uAns === cAns) {
+          isCorrect = true;
+        } else if (question.options && question.options.length > 0) {
+          // Check if correct answer is option letter e.g., 'A', 'B', 'C', 'D'
+          const letterIndex = ["a", "b", "c", "d"].indexOf(cAns);
+          if (letterIndex >= 0 && question.options[letterIndex]) {
+            const optionText = (question.options[letterIndex] || "").trim().toLowerCase();
+            if (uAns === optionText || uAns === `option ${cAns}`) {
+              isCorrect = true;
+            }
+          }
+          // Vice versa: if user selected "C" and correct answer is option[2]
+          const userLetterIndex = ["a", "b", "c", "d"].indexOf(uAns);
+          if (userLetterIndex >= 0 && question.options[userLetterIndex]) {
+            const optionText = (question.options[userLetterIndex] || "").trim().toLowerCase();
+            if (optionText === cAns) {
+              isCorrect = true;
+            }
+          }
+        }
+
+        if (isCorrect) {
+          marksAwarded = Number(question.marks) || 1;
+          totalScore += marksAwarded;
+        }
+      }
+
+      return {
+        questionId: userAns.questionId,
+        answer: userAns.answer || "",
+        isCorrect,
+        marksAwarded
+      };
+    });
+
+  const totalExamMarks = Number(exam.totalMarks) || totalPossibleMarks || 100;
   const percentage = totalExamMarks > 0 ? Math.round((totalScore / totalExamMarks) * 100) : 0;
   
   let passThresholdPercentage = 40;
@@ -101,7 +106,22 @@ const finalizeAttempt = async (attempt, exam, isAuto = false) => {
   attempt.status = isAuto ? "auto_submitted" : "completed";
   attempt.submittedAt = new Date();
 
+  if (!attempt.batch && exam.batch) {
+    attempt.batch = exam.batch._id || exam.batch;
+  }
+
   await attempt.save();
+
+  // Robust fallbacks for createdBy and createdByRole to ensure ExamResult schema validation always passes
+  let createdBy = exam.createdBy;
+  if (!createdBy || !mongoose.Types.ObjectId.isValid(createdBy)) {
+    createdBy = attempt.student;
+  }
+
+  let createdByRole = exam.createdByRole;
+  if (!createdByRole || !["admin", "teacher"].includes(createdByRole)) {
+    createdByRole = "admin";
+  }
 
   // Store in existing ExamResult collection
   await ExamResult.findOneAndUpdate(
@@ -114,8 +134,8 @@ const finalizeAttempt = async (attempt, exam, isAuto = false) => {
       grade,
       status,
       remarks: `Online Exam (${isAuto ? "Auto-submitted" : "Submitted"}) on ${new Date().toLocaleDateString()}`,
-      createdBy: exam.createdBy,
-      createdByRole: exam.createdByRole
+      createdBy,
+      createdByRole
     },
     { new: true, upsert: true, setDefaultsOnInsert: true }
   );
@@ -157,7 +177,7 @@ export const getStudentExamStatus = async (req, res) => {
         windowStatus = "completed";
       } else if (attempt.status === "in_progress") {
         remainingSeconds = Math.max(0, Math.floor((new Date(attempt.endTime).getTime() - serverNow.getTime()) / 1000));
-        if (remainingSeconds <= 0) {
+        if (remainingSeconds <= 0 || (attempt.tabSwitchCount && attempt.tabSwitchCount >= 3)) {
           await finalizeAttempt(attempt, exam, true);
           windowStatus = "completed";
         } else {
@@ -230,6 +250,33 @@ export const startOrResumeAttempt = async (req, res) => {
 
     let attempt = await ExamAttempt.findOne({ exam: examId, student: studentId });
 
+    if (!attempt) {
+      // Create new attempt with E11000 duplicate key safety for concurrent requests
+      const durationMs = (exam.durationMinutes || 60) * 60 * 1000;
+      const startTime = new Date();
+      const endTime = new Date(startTime.getTime() + durationMs);
+
+      try {
+        attempt = new ExamAttempt({
+          exam: exam._id,
+          student: studentId,
+          batch: exam.batch,
+          startTime,
+          endTime,
+          status: "in_progress",
+          activeSessionId: sessionId,
+          answers: []
+        });
+        await attempt.save();
+      } catch (saveErr) {
+        if (saveErr.code === 11000 || (saveErr.message && saveErr.message.includes("E11000"))) {
+          attempt = await ExamAttempt.findOne({ exam: examId, student: studentId });
+        } else {
+          throw saveErr;
+        }
+      }
+    }
+
     if (attempt) {
       if (attempt.status === "completed" || attempt.status === "auto_submitted") {
         return res.status(400).json({ message: "Exam has already been submitted", attempt });
@@ -244,24 +291,6 @@ export const startOrResumeAttempt = async (req, res) => {
 
       // Resume attempt - update active session token
       attempt.activeSessionId = sessionId;
-      await attempt.save();
-    } else {
-      // Create new attempt
-      const durationMs = (exam.durationMinutes || 60) * 60 * 1000;
-      const startTime = new Date();
-      const endTime = new Date(startTime.getTime() + durationMs);
-
-      attempt = new ExamAttempt({
-        exam: exam._id,
-        student: studentId,
-        batch: exam.batch,
-        startTime,
-        endTime,
-        status: "in_progress",
-        activeSessionId: sessionId,
-        answers: []
-      });
-
       await attempt.save();
     }
 
@@ -375,6 +404,23 @@ export const syncTimer = async (req, res) => {
   }
 };
 
+// Security Policy Helper
+const evaluateSecurityPolicy = (attempt) => {
+  const tabSwitches = attempt.tabSwitchCount || 0;
+  const fsExits = attempt.fullscreenExitCount || 0;
+  const totalViolations = tabSwitches + fsExits;
+
+  if (tabSwitches >= 3 || totalViolations >= 5) {
+    attempt.securityStatus = "AutoSubmitted";
+  } else if (tabSwitches >= 2 || fsExits >= 2 || totalViolations >= 3) {
+    attempt.securityStatus = "Suspicious";
+  } else if (tabSwitches >= 1 || fsExits >= 1) {
+    attempt.securityStatus = "Warning";
+  } else {
+    attempt.securityStatus = "Normal";
+  }
+};
+
 // 5. Log Tab Switch
 export const logTabSwitch = async (req, res) => {
   try {
@@ -382,9 +428,77 @@ export const logTabSwitch = async (req, res) => {
     const attempt = await ExamAttempt.findById(attemptId);
     if (attempt && attempt.status === "in_progress") {
       attempt.tabSwitchCount = (attempt.tabSwitchCount || 0) + 1;
+      evaluateSecurityPolicy(attempt);
       await attempt.save();
     }
-    res.status(200).json({ message: "Logged", count: attempt ? attempt.tabSwitchCount : 0 });
+    res.status(200).json({ message: "Logged", count: attempt ? attempt.tabSwitchCount : 0, securityStatus: attempt?.securityStatus });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+};
+
+// 5b. Log Detailed Security Event
+export const logSecurityEvent = async (req, res) => {
+  try {
+    const { attemptId, sessionId, eventType, metadata } = req.body;
+    const studentId = req.user.id || req.user._id;
+
+    if (!attemptId || !eventType) {
+      return res.status(400).json({ message: "Missing attemptId or eventType" });
+    }
+
+    const attempt = await ExamAttempt.findById(attemptId);
+    if (!attempt) {
+      return res.status(404).json({ message: "Attempt not found" });
+    }
+
+    if (attempt.student.toString() !== studentId.toString()) {
+      return res.status(403).json({ message: "Unauthorized attempt access" });
+    }
+
+    if (attempt.activeSessionId && sessionId && attempt.activeSessionId !== sessionId) {
+      return res.status(403).json({ message: "Session Conflict: Active in another tab" });
+    }
+
+    if (attempt.status !== "in_progress") {
+      return res.status(200).json({ message: "Exam completed", status: attempt.status, securityStatus: attempt.securityStatus });
+    }
+
+    // Append to security events
+    attempt.securityEvents = attempt.securityEvents || [];
+    attempt.securityEvents.push({
+      eventType,
+      timestamp: new Date(),
+      metadata: metadata || {}
+    });
+
+    if (["TAB_SWITCH", "WINDOW_BLUR", "PAGE_HIDDEN"].includes(eventType)) {
+      attempt.tabSwitchCount = (attempt.tabSwitchCount || 0) + 1;
+    } else if (eventType === "FULLSCREEN_EXIT") {
+      attempt.fullscreenExitCount = (attempt.fullscreenExitCount || 0) + 1;
+    }
+
+    evaluateSecurityPolicy(attempt);
+
+    let autoSubmitted = false;
+    if (attempt.securityStatus === "AutoSubmitted") {
+      const exam = await Exam.findById(attempt.exam);
+      if (exam) {
+        await finalizeAttempt(attempt, exam, true);
+        autoSubmitted = true;
+      }
+    } else {
+      await attempt.save();
+    }
+
+    res.status(200).json({
+      message: "Security event logged",
+      securityStatus: attempt.securityStatus,
+      tabSwitchCount: attempt.tabSwitchCount,
+      fullscreenExitCount: attempt.fullscreenExitCount,
+      autoSubmitted,
+      status: attempt.status
+    });
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
@@ -393,7 +507,7 @@ export const logTabSwitch = async (req, res) => {
 // 6. Submit Exam
 export const submitAttempt = async (req, res) => {
   try {
-    const { attemptId, sessionId } = req.body;
+    const { attemptId, sessionId, isAuto } = req.body;
     const studentId = req.user.id || req.user._id;
 
     const attempt = await ExamAttempt.findById(attemptId);
@@ -410,7 +524,8 @@ export const submitAttempt = async (req, res) => {
       return res.status(404).json({ message: "Exam model missing" });
     }
 
-    const finalAttempt = await finalizeAttempt(attempt, exam, false);
+    const isAutoSubmit = isAuto || (attempt.tabSwitchCount && attempt.tabSwitchCount >= 3);
+    const finalAttempt = await finalizeAttempt(attempt, exam, isAutoSubmit);
 
     res.status(200).json({
       message: "Exam submitted successfully",
@@ -448,23 +563,27 @@ export const getStudentResultDetail = async (req, res) => {
     // Map questions with student answers
     const questionsMap = new Map();
     (exam.questions || []).forEach((q) => {
-      questionsMap.set(q._id.toString(), q);
+      if (q && q._id) {
+        questionsMap.set(q._id.toString(), q);
+      }
     });
 
-    const breakdown = (attempt.answers || []).map((ans) => {
-      const q = questionsMap.get(ans.questionId.toString());
-      return {
-        questionId: ans.questionId,
-        questionText: q ? q.questionText : "Question",
-        questionType: q ? q.questionType : "mcq",
-        options: q ? q.options : [],
-        correctAnswer: q ? q.correctAnswer : "",
-        userAnswer: ans.answer,
-        isCorrect: ans.isCorrect,
-        marksAwarded: ans.marksAwarded,
-        totalMarks: q ? q.marks : 1
-      };
-    });
+    const breakdown = (attempt.answers || [])
+      .filter((ans) => ans && ans.questionId)
+      .map((ans) => {
+        const q = questionsMap.get(ans.questionId.toString());
+        return {
+          questionId: ans.questionId,
+          questionText: q ? q.questionText : "Question",
+          questionType: q ? q.questionType : "mcq",
+          options: q ? q.options : [],
+          correctAnswer: q ? q.correctAnswer : "",
+          userAnswer: ans.answer || "",
+          isCorrect: ans.isCorrect || false,
+          marksAwarded: ans.marksAwarded || 0,
+          totalMarks: q ? q.marks || 1 : 1
+        };
+      });
 
     let passThresholdPct = 40;
     const totMarks = attempt.totalMarks || exam.totalMarks || 100;
@@ -497,7 +616,11 @@ export const getStudentResultDetail = async (req, res) => {
         percentage: attempt.percentage,
         submittedAt: attempt.submittedAt,
         status: computedStatus,
-        grade: result ? result.grade : (attempt.percentage >= 90 ? "A+" : attempt.percentage >= 80 ? "A" : attempt.percentage >= 70 ? "B" : attempt.percentage >= 60 ? "C" : attempt.percentage >= 50 ? "D" : "F")
+        grade: result ? result.grade : (attempt.percentage >= 90 ? "A+" : attempt.percentage >= 80 ? "A" : attempt.percentage >= 70 ? "B" : attempt.percentage >= 60 ? "C" : attempt.percentage >= 50 ? "D" : "F"),
+        securityStatus: attempt.securityStatus || "Normal",
+        tabSwitchCount: attempt.tabSwitchCount || 0,
+        fullscreenExitCount: attempt.fullscreenExitCount || 0,
+        securityEvents: attempt.securityEvents || []
       },
       breakdown
     });

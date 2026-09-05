@@ -71,6 +71,40 @@ const examAttemptSchema = new mongoose.Schema(
       type: Number,
       default: 0
     },
+    fullscreenExitCount: {
+      type: Number,
+      default: 0
+    },
+    securityStatus: {
+      type: String,
+      enum: ["Normal", "Warning", "Suspicious", "AutoSubmitted"],
+      default: "Normal"
+    },
+    securityEvents: [
+      {
+        eventType: {
+          type: String,
+          enum: [
+            "TAB_SWITCH",
+            "WINDOW_BLUR",
+            "FULLSCREEN_EXIT",
+            "PAGE_HIDDEN",
+            "MULTIPLE_TAB_ATTEMPT",
+            "INVALID_SESSION",
+            "NETWORK_DISCONNECT",
+            "RECONNECT"
+          ],
+          required: true
+        },
+        timestamp: {
+          type: Date,
+          default: Date.now
+        },
+        metadata: {
+          type: mongoose.Schema.Types.Mixed
+        }
+      }
+    ],
     submittedAt: {
       type: Date
     }

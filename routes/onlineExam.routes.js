@@ -5,6 +5,7 @@ import {
   saveAnswer,
   syncTimer,
   logTabSwitch,
+  logSecurityEvent,
   submitAttempt,
   getStudentResultDetail
 } from "../controllers/onlineExam.controller.js";
@@ -21,6 +22,7 @@ router.post("/start/:examId", isStudent, startOrResumeAttempt);
 router.post("/save-answer", isStudent, saveAnswer);
 router.post("/sync-timer", isStudent, syncTimer);
 router.post("/tab-switch", isStudent, logTabSwitch);
+router.post("/log-security-event", isStudent, logSecurityEvent);
 router.post("/submit", isStudent, submitAttempt);
 
 export default router;

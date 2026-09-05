@@ -25,7 +25,15 @@ const reportSchema = new mongoose.Schema(
     auditDate: { type: Date, default: Date.now },
     pdfUrl: { type: String, default: "" },
 
-    status:{type: String, enum:["draft","final"],default:"final"}
+    status:{type: String, enum:["draft","final"],default:"final"},
+    reportType: { type: String, enum: ["audit", "exam"], default: "audit" },
+    examSummary: {
+      totalExamsAttempted: { type: Number, default: 0 },
+      averagePercentage: { type: Number, default: 0 },
+      highestScore: { type: Number, default: 0 },
+      lowestScore: { type: Number, default: 0 },
+      overallStatus: { type: String, default: "" }
+    }
   },
   { timestamps: true }
 );
